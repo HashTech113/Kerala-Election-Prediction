@@ -1,7 +1,9 @@
 import { PredictionRow } from "../types/prediction";
 
 const API_BASE =
-  import.meta.env.VITE_API_BASE_URL?.trim() || "http://127.0.0.1:8001";
+  import.meta.env.VITE_API_BASE_URL?.trim() ||
+  import.meta.env.VITE_API_URL?.trim() ||
+  "http://127.0.0.1:8001";
 
 export async function checkHealth(signal?: AbortSignal): Promise<boolean> {
   const response = await fetch(`${API_BASE}/api/health`, { signal });

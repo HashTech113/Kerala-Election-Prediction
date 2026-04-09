@@ -206,6 +206,46 @@ Then open:
 - Frontend: `http://127.0.0.1:5173`
 - Backend API: `http://127.0.0.1:8001/api/predictions`
 
+## Deploy Backend on Railway (for Vercel Frontend)
+
+This repository is now Railway-ready with:
+- `Procfile` (start command)
+- `railway.json` (Nixpacks builder + `/api/health` health check)
+
+### 1. Push latest code
+
+```bash
+git add .
+git commit -m "prepare Railway deployment"
+git push
+```
+
+### 2. Deploy backend on Railway
+
+1. Railway -> New Project -> Deploy from GitHub Repo
+2. Select this repository
+3. Confirm service start command:
+   - `python backend/server.py`
+4. Wait for deploy success
+
+Backend must respond at:
+- `https://<railway-domain>/api/health`
+- `https://<railway-domain>/api/predictions`
+
+### 3. Connect Vercel frontend to Railway backend
+
+In Vercel project settings -> Environment Variables, set:
+
+```env
+VITE_API_BASE_URL=https://<railway-domain>
+```
+
+Note:
+- Frontend also accepts `VITE_API_URL` as an alias.
+- No trailing slash needed.
+
+Then redeploy Vercel frontend.
+
 ## Clear End-to-End Run Process
 
 1. Install dependencies

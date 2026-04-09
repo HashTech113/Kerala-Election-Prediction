@@ -1,11 +1,79 @@
 import csv
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
 PREDICTIONS_FILE = ROOT / "predictions_2026.csv"
+ASSEMBLY_FALLBACK_FILE = ROOT / "data_files" / "kerala_assembly_2026.csv"
+
+
+def _to_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _load_rows_from_predictions_file():
+    rows = []
+    with PREDICTIONS_FILE.open("r", encoding="utf-8", newline="") as fp:
+        reader = csv.DictReader(fp)
+        for row in reader:
+            rows.append(
+                {
+                    "constituency": row.get("constituency", ""),
+                    "district": row.get("district", ""),
+                    "predicted": row.get("predicted", ""),
+                    "confidence": _to_float(row.get("confidence", 0)),
+                    "LDF": _to_float(row.get("LDF", 0)),
+                    "UDF": _to_float(row.get("UDF", 0)),
+                    "NDA": _to_float(row.get("NDA", 0)),
+                    "OTHERS": _to_float(row.get("OTHERS", 0)),
+                }
+            )
+    return rows
+
+
+def _load_rows_from_assembly_fallback():
+    if not ASSEMBLY_FALLBACK_FILE.exists():
+        raise FileNotFoundError(
+            f"Neither {PREDICTIONS_FILE.name} nor {ASSEMBLY_FALLBACK_FILE} was found. "
+            "Run create_dataset.py and train.py before starting the server."
+        )
+
+    rows = []
+    with ASSEMBLY_FALLBACK_FILE.open("r", encoding="utf-8", newline="") as fp:
+        reader = csv.DictReader(fp)
+        for row in reader:
+            shares = {
+                "LDF": _to_float(row.get("proj_2026_ldf_pct", 0)),
+                "UDF": _to_float(row.get("proj_2026_udf_pct", 0)),
+                "NDA": _to_float(row.get("proj_2026_nda_pct", 0)),
+                "OTHERS": _to_float(row.get("proj_2026_others_pct", 0)),
+            }
+            sorted_shares = sorted(shares.values(), reverse=True)
+            confidence = sorted_shares[0] - sorted_shares[1] if len(sorted_shares) > 1 else 0.0
+
+            predicted = row.get("proj_2026_winner", "")
+            if predicted not in shares:
+                predicted = max(shares, key=shares.get)
+
+            rows.append(
+                {
+                    "constituency": row.get("constituency", ""),
+                    "district": row.get("district", ""),
+                    "predicted": predicted,
+                    "confidence": confidence,
+                    "LDF": shares["LDF"],
+                    "UDF": shares["UDF"],
+                    "NDA": shares["NDA"],
+                    "OTHERS": shares["OTHERS"],
+                }
+            )
+    return rows
 
 
 class ElectionAPIHandler(BaseHTTPRequestHandler):
@@ -23,28 +91,9 @@ class ElectionAPIHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _load_predictions(self):
-        if not PREDICTIONS_FILE.exists():
-            raise FileNotFoundError(
-                f"{PREDICTIONS_FILE} not found. Run train.py first to generate predictions_2026.csv"
-            )
-
-        rows = []
-        with PREDICTIONS_FILE.open("r", encoding="utf-8", newline="") as fp:
-            reader = csv.DictReader(fp)
-            for row in reader:
-                rows.append(
-                    {
-                        "constituency": row.get("constituency", ""),
-                        "district": row.get("district", ""),
-                        "predicted": row.get("predicted", ""),
-                        "confidence": float(row.get("confidence", 0) or 0),
-                        "LDF": float(row.get("LDF", 0) or 0),
-                        "UDF": float(row.get("UDF", 0) or 0),
-                        "NDA": float(row.get("NDA", 0) or 0),
-                        "OTHERS": float(row.get("OTHERS", 0) or 0),
-                    }
-                )
-        return rows
+        if PREDICTIONS_FILE.exists():
+            return _load_rows_from_predictions_file()
+        return _load_rows_from_assembly_fallback()
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -79,9 +128,11 @@ class ElectionAPIHandler(BaseHTTPRequestHandler):
         )
 
 
-def main(host="127.0.0.1", port=8001):
-    server = ThreadingHTTPServer((host, port), ElectionAPIHandler)
-    print(f"Backend API running on http://{host}:{port}")
+def main(host=None, port=None):
+    bind_host = host if host is not None else os.getenv("HOST", "0.0.0.0")
+    bind_port = int(port) if port is not None else int(os.getenv("PORT", "8000"))
+    server = ThreadingHTTPServer((bind_host, bind_port), ElectionAPIHandler)
+    print(f"Backend API running on http://{bind_host}:{bind_port}")
     server.serve_forever()
 
 

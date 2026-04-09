@@ -123,7 +123,8 @@ body {
   height: 56px;
   object-fit: contain;
   margin-top: 4px;
-  animation: logoZoom 3.2s ease-in-out infinite;
+  animation: logoZoom 3.2s ease-in-out 1 both;
+  will-change: transform;
 }
 
 .brand-title {
@@ -315,16 +316,19 @@ h2 {
 
 .middle-stage.animate-cards .center-card {
   animation: centerCardZoomOut 1200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
 }
 
 .middle-stage.animate-cards .left-stack {
   animation: sideCardSlideInLeft 1400ms cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: 220ms;
+  will-change: transform, opacity;
 }
 
 .middle-stage.animate-cards .right-stack {
   animation: sideCardSlideInRight 1400ms cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: 320ms;
+  will-change: transform, opacity;
 }
 
 .right-stack .panel {
@@ -407,6 +411,7 @@ h2 {
   transition: width 300ms ease;
   transform-origin: left center;
   transform: scaleX(1);
+  will-change: transform;
 }
 
 .fill-LDF,
@@ -508,6 +513,7 @@ select:focus {
   height: 100%;
   transform-origin: left center;
   transform: scaleX(1);
+  will-change: transform;
 }
 
 .middle-stage.animate-cards .bar-fill {
@@ -518,24 +524,6 @@ select:focus {
 .middle-stage.animate-cards .district-segment {
   animation: growLine 1200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   animation-delay: 1550ms;
-}
-
-.center-card.animate-lines .bar-fill {
-  animation: growLine 1100ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  animation-delay: 80ms;
-}
-
-.left-stack.animate-lines .district-segment {
-  animation: growLine 950ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  animation-delay: 0ms;
-}
-
-.bar-fill.line-grow {
-  animation: growLine 1100ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-.district-segment.line-grow {
-  animation: growLine 950ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .tight-list {
@@ -622,6 +610,8 @@ select:focus {
   backdrop-filter: var(--glass-blur-strong);
   -webkit-backdrop-filter: var(--glass-blur-strong);
   box-shadow: var(--glass-shadow-elevated);
+  content-visibility: auto;
+  contain-intrinsic-size: 520px;
 }
 
 .explorer-section {
@@ -644,7 +634,8 @@ select:focus {
   background:
     radial-gradient(62% 34% at 20% 50%, rgba(99, 102, 241, 0.2), transparent 68%),
     radial-gradient(58% 30% at 78% 46%, rgba(59, 130, 246, 0.17), transparent 70%);
-  animation: explorerWave 8.5s ease-in-out infinite alternate;
+  animation: explorerWave 8.5s ease-in-out 1 both;
+  will-change: transform;
 }
 
 .table-head {
@@ -881,13 +872,11 @@ tbody tr:hover {
 @keyframes centerCardZoomOut {
   0% {
     opacity: 0;
-    transform: scale(1.06);
-    filter: blur(2px);
+    transform: scale(1.04);
   }
   100% {
     opacity: 1;
     transform: scale(1);
-    filter: blur(0);
   }
 }
 
@@ -934,16 +923,14 @@ tbody tr:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .q-logo,
+  .winner-fade-in,
   .center-card,
   .left-stack,
   .right-stack,
   .explorer-section::before,
   .middle-stage.animate-cards .bar-fill,
-  .middle-stage.animate-cards .district-segment,
-  .center-card.animate-lines .bar-fill,
-  .left-stack.animate-lines .district-segment,
-  .bar-fill.line-grow,
-  .district-segment.line-grow {
+  .middle-stage.animate-cards .district-segment {
     animation: none !important;
   }
 }

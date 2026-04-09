@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { PartyBadge } from "./components/PartyBadge";
+import { AnimatedKpiGrid } from "./components/AnimatedKpiGrid";
 import { API_BASE, checkHealth, fetchPredictions } from "./services/api";
 import { PredictionRow, Party } from "./types/prediction";
 import { asPercent, asSeatPercent } from "./utils/format";
 
 const PARTIES: Party[] = ["LDF", "UDF", "NDA", "OTHERS"];
 const HIGH_CONFIDENCE_THRESHOLD = 0.75;
+let hasAnimatedMiddleStageInSession = false;
 
 function getSeatCounts(rows: PredictionRow[]) {
   const counts: Record<Party, number> = {
@@ -19,12 +21,6 @@ function getSeatCounts(rows: PredictionRow[]) {
   return counts;
 }
 
-function getProjectedWinner(rows: PredictionRow[]): Party | "-" {
-  if (rows.length === 0) return "-";
-  const counts = getSeatCounts(rows);
-  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0] as Party;
-}
-
 export function App() {
   const [rows, setRows] = useState<PredictionRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,62 +29,45 @@ export function App() {
   const [district, setDistrict] = useState("ALL");
   const [party, setParty] = useState<Party | "ALL">("ALL");
   const [query, setQuery] = useState("");
-  const [animatedConfidence, setAnimatedConfidence] = useState(0);
-  const [animatedTotal, setAnimatedTotal] = useState(0);
-  const [animatedWinner, setAnimatedWinner] = useState("");
-  const [kpiAnimCycle, setKpiAnimCycle] = useState(1);
-  const kpiGridRef = useRef<HTMLElement | null>(null);
   const middleStageRef = useRef<HTMLElement | null>(null);
-  const leftCardRef = useRef<HTMLElement | null>(null);
-  const centerCardRef = useRef<HTMLElement | null>(null);
-  const rightCardRef = useRef<HTMLElement | null>(null);
-  const middleAnimDebounceRef = useRef<number | null>(null);
-  const middleAnimLastRunRef = useRef(-10000);
-
-  const replayMiddleStageAnimation = useCallback(() => {
-    const element = middleStageRef.current;
-    if (!element) return;
-
-    const now = performance.now();
-    if (now - middleAnimLastRunRef.current < 700) return;
-    middleAnimLastRunRef.current = now;
-
-    element.classList.remove("animate-cards");
-    void element.offsetWidth;
-    element.classList.add("animate-cards");
-  }, []);
-
-  const replayCardAnimation = useCallback((element: HTMLElement | null) => {
-    if (!element) return;
-
-    const lineEls = element.querySelectorAll<HTMLElement>(".bar-fill, .district-segment");
-    for (const line of lineEls) {
-      line.classList.remove("line-grow");
-      void line.offsetWidth;
-      line.classList.add("line-grow");
-    }
-  }, []);
+  const hasAnimatedMiddleStageRef = useRef(hasAnimatedMiddleStageInSession);
+  const deferredQuery = useDeferredValue(query);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     async function load() {
       setLoading(true);
       setError(null);
 
       try {
-        const healthy = await checkHealth();
+        const healthy = await checkHealth(controller.signal);
         if (!healthy) throw new Error("Backend health check failed.");
 
-        const predictions = await fetchPredictions();
+        const predictions = await fetchPredictions(controller.signal);
+        if (controller.signal.aborted) return;
         setRows(predictions);
       } catch (err) {
+        if (
+          controller.signal.aborted ||
+          (err instanceof DOMException && err.name === "AbortError") ||
+          (err instanceof Error && err.name === "AbortError")
+        ) {
+          return;
+        }
         const message = err instanceof Error ? err.message : "Unknown error";
         setError(`${message} Ensure backend is running on ${API_BASE}.`);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
 
     void load();
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const districts = useMemo(() => {
@@ -96,7 +75,7 @@ export function App() {
   }, [rows]);
 
   const filteredRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
 
     const next = rows.filter((r) => {
       const districtOk = district === "ALL" || r.district === district;
@@ -108,7 +87,7 @@ export function App() {
     next.sort((a, b) => b.confidence - a.confidence);
 
     return next;
-  }, [rows, district, party, query]);
+  }, [rows, district, party, deferredQuery]);
 
   const seatCounts = useMemo(() => getSeatCounts(filteredRows), [filteredRows]);
   const sortedParties = useMemo(() => {
@@ -116,17 +95,30 @@ export function App() {
   }, [seatCounts]);
   const total = filteredRows.length;
   const safeTotal = total || 1;
-  const projectedWinner = getProjectedWinner(filteredRows);
-  const averageConfidence =
-    filteredRows.reduce((sum, r) => sum + r.confidence, 0) / safeTotal;
-  const highConfidence = filteredRows.filter(
-    (r) => r.confidence >= HIGH_CONFIDENCE_THRESHOLD,
-  ).length;
+  const projectedWinner = useMemo<Party | "-">(() => {
+    if (total === 0) return "-";
+    let winner: Party = PARTIES[0];
+    for (const partyName of PARTIES) {
+      if (seatCounts[partyName] > seatCounts[winner]) {
+        winner = partyName;
+      }
+    }
+    return winner;
+  }, [total, seatCounts]);
+  const averageConfidence = useMemo(() => {
+    return filteredRows.reduce((sum, r) => sum + r.confidence, 0) / safeTotal;
+  }, [filteredRows, safeTotal]);
+  const highConfidence = useMemo(() => {
+    return filteredRows.reduce(
+      (count, row) =>
+        count + (row.confidence >= HIGH_CONFIDENCE_THRESHOLD ? 1 : 0),
+      0,
+    );
+  }, [filteredRows]);
 
   const closestSeats = useMemo(() => {
-    return [...filteredRows]
-      .sort((a, b) => a.confidence - b.confidence)
-      .slice(0, 8);
+    const start = Math.max(0, filteredRows.length - 8);
+    return filteredRows.slice(start).reverse();
   }, [filteredRows]);
 
   const districtBreakdown = useMemo(() => {
@@ -145,189 +137,37 @@ export function App() {
   }, [filteredRows]);
 
   useEffect(() => {
-    const target = averageConfidence;
-    const durationMs = 1200;
-    const start = performance.now();
-    const from = 0;
+    const element = middleStageRef.current;
+    if (!element || loading || error || hasAnimatedMiddleStageRef.current) return;
 
-    let frameId = 0;
-    const tick = (now: number) => {
-      const t = Math.min((now - start) / durationMs, 1);
-      const eased = 1 - Math.pow(1 - t, 3);
-      const value = from + (target - from) * eased;
-      setAnimatedConfidence(value);
-      if (t < 1) frameId = requestAnimationFrame(tick);
+    const triggerStageAnimationOnce = () => {
+      if (hasAnimatedMiddleStageRef.current) return;
+      hasAnimatedMiddleStageRef.current = true;
+      hasAnimatedMiddleStageInSession = true;
+      element.classList.add("animate-cards");
     };
 
-    frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
-  }, [averageConfidence, kpiAnimCycle]);
-
-  useEffect(() => {
-    const target = total;
-    const durationMs = 900;
-    const start = performance.now();
-    const from = 0;
-
-    let frameId = 0;
-    const tick = (now: number) => {
-      const t = Math.min((now - start) / durationMs, 1);
-      const eased = 1 - Math.pow(1 - t, 3);
-      const value = from + (target - from) * eased;
-      setAnimatedTotal(Math.round(value));
-      if (t < 1) frameId = requestAnimationFrame(tick);
-    };
-
-    frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
-  }, [total, kpiAnimCycle]);
-
-  useEffect(() => {
-    const winnerText = String(projectedWinner);
-    if (winnerText.length <= 1) {
-      setAnimatedWinner(winnerText);
+    if (typeof IntersectionObserver === "undefined") {
+      triggerStageAnimationOnce();
       return;
     }
 
-    setAnimatedWinner("");
-    let index = 0;
-    let intervalId: number | undefined;
-
-    const startTimeoutId = window.setTimeout(() => {
-      intervalId = window.setInterval(() => {
-        index += 1;
-        setAnimatedWinner(winnerText.slice(0, index));
-        if (index >= winnerText.length && intervalId) {
-          window.clearInterval(intervalId);
-        }
-      }, 140);
-    }, 120);
-
-    return () => {
-      window.clearTimeout(startTimeoutId);
-      if (intervalId) window.clearInterval(intervalId);
-    };
-  }, [projectedWinner, kpiAnimCycle]);
-
-  useEffect(() => {
-    const element = kpiGridRef.current;
-    if (!element) return;
-
-    let wasInView = false;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.35 && !wasInView) {
-            wasInView = true;
-            setKpiAnimCycle((c) => c + 1);
-          } else if (!entry.isIntersecting || entry.intersectionRatio <= 0.08) {
-            wasInView = false;
-          }
-        }
-      },
-      { threshold: [0, 0.08, 0.35, 0.45] },
-    );
+    const observer = new IntersectionObserver((entries, observerInstance) => {
+      const shouldAnimate = entries.some(
+        (entry) => entry.isIntersecting && entry.intersectionRatio >= 0.12,
+      );
+      if (!shouldAnimate) return;
+      triggerStageAnimationOnce();
+      observerInstance.disconnect();
+    }, { threshold: [0, 0.12] });
 
     observer.observe(element);
-    return () => observer.disconnect();
+    const fallbackTimerId = window.setTimeout(triggerStageAnimationOnce, 300);
+    return () => {
+      window.clearTimeout(fallbackTimerId);
+      observer.disconnect();
+    };
   }, [loading, error]);
-
-  useEffect(() => {
-    const element = middleStageRef.current;
-    if (!element) return;
-
-    let wasInView = false;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (
-            entry.isIntersecting &&
-            entry.intersectionRatio >= 0.12 &&
-            !wasInView
-          ) {
-            wasInView = true;
-            replayMiddleStageAnimation();
-          } else if (!entry.isIntersecting || entry.intersectionRatio <= 0.06) {
-            wasInView = false;
-            element.classList.remove("animate-cards");
-          }
-        }
-      },
-      { threshold: [0, 0.06, 0.12, 0.28] },
-    );
-
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [loading, error, replayMiddleStageAnimation]);
-
-  useEffect(() => {
-    if (loading || error) return;
-    const element = middleStageRef.current;
-    if (!element) return;
-
-    const id = window.setTimeout(() => {
-      replayMiddleStageAnimation();
-    }, 140);
-
-    return () => window.clearTimeout(id);
-  }, [loading, error, replayMiddleStageAnimation]);
-
-  useEffect(() => {
-    const leftStack = leftCardRef.current;
-    const centerCard = centerCardRef.current;
-    const rightStack = rightCardRef.current;
-
-    const cards = [
-      {
-        targetNode: leftStack,
-        listenNode: leftStack?.querySelector<HTMLElement>(".panel") ?? leftStack,
-        hasLines: true,
-      },
-      {
-        targetNode: centerCard,
-        listenNode: centerCard,
-        hasLines: true,
-      },
-      {
-        targetNode: rightStack,
-        listenNode: rightStack?.querySelector<HTMLElement>(".panel") ?? rightStack,
-        hasLines: false,
-      },
-    ];
-
-    const cleanups: Array<() => void> = [];
-
-    for (const card of cards) {
-      const targetNode = card.targetNode;
-      const listenNode = card.listenNode;
-      if (!targetNode || !listenNode) continue;
-
-      const onScrollLike = () => {
-        if (middleAnimDebounceRef.current) {
-          window.clearTimeout(middleAnimDebounceRef.current);
-        }
-        middleAnimDebounceRef.current = window.setTimeout(() => {
-          if (card.hasLines) {
-            replayCardAnimation(targetNode);
-          }
-        }, 120);
-      };
-
-      // Trigger only when this specific card is actually scrolled.
-      listenNode.addEventListener("scroll", onScrollLike, { passive: true });
-
-      cleanups.push(() => {
-        listenNode.removeEventListener("scroll", onScrollLike);
-      });
-    }
-
-    return () => {
-      if (middleAnimDebounceRef.current) {
-        window.clearTimeout(middleAnimDebounceRef.current);
-      }
-      for (const cleanup of cleanups) cleanup();
-    };
-  }, [loading, error, replayCardAnimation]);
 
   return (
     <div className="app-shell">
@@ -338,7 +178,14 @@ export function App() {
         <header className="hero">
           <div className="hero-inner">
             <div className="brand-line" aria-label="QVotelytics">
-              <img src="/owlytics" alt="Q logo" className="q-logo" />
+              <img
+                src="/assets/owlytics"
+                alt="Q logo"
+                className="q-logo"
+                width={56}
+                height={56}
+                decoding="async"
+              />
               <h1 className="brand-title">Election Prediction</h1>
             </div>
             <p className="hero-tagline">
@@ -353,23 +200,14 @@ export function App() {
 
         {!loading && !error && (
           <>
-            <section className="kpi-grid" ref={kpiGridRef}>
-              <article className="panel kpi-card">
-                <h3>Total Constituencies</h3>
-                <strong>{animatedTotal}</strong>
-              </article>
-              <article className="panel kpi-card">
-                <h3>Projected Winner</h3>
-                <strong className="winner-fade-in">{animatedWinner}</strong>
-              </article>
-              <article className="panel kpi-card">
-                <h3>Average Confidence</h3>
-                <strong>{asPercent(animatedConfidence)}</strong>
-              </article>
-            </section>
+            <AnimatedKpiGrid
+              totalConstituencies={total}
+              projectedWinner={String(projectedWinner)}
+              averageConfidence={averageConfidence}
+            />
 
             <section className="middle-stage" ref={middleStageRef}>
-              <aside className="left-stack" ref={leftCardRef}>
+              <aside className="left-stack">
                 <article className="panel">
                   <h2>District Breakdown</h2>
                   <div className="district-list">
@@ -395,7 +233,7 @@ export function App() {
                 </article>
               </aside>
 
-              <article className="panel center-card" ref={centerCardRef}>
+              <article className="panel center-card">
                 <div className="center-inner-grid">
                   <section className="inner-block">
                     <h2>Filters</h2>
@@ -469,7 +307,7 @@ export function App() {
                 </div>
               </article>
 
-              <aside className="right-stack" ref={rightCardRef}>
+              <aside className="right-stack">
                 <article className="panel">
                   <h2>Most Competitive Seats</h2>
                   <ul className="tight-list">

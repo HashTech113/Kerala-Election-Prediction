@@ -1,0 +1,5 @@
+party,news_sentiment,twitter_mentions,facebook_engagement,instagram_posts,linkedin_articles,youtube_views,positive_mentions_pct,negative_mentions_pct,neutral_mentions_pct,governance_score,change_sentiment,development_score,welfare_score,sabarimala_gold_impact,healthcare_crisis_impact,unemployment_impact,fcra_controversy_impact,ls2024_momentum,lb2025_momentum,anti_incumbency_score,ai_campaign_score,ground_campaign_score,celebrity_endorsement,poll_seats_low,poll_seats_mid,poll_seats_high,poll_vote_share,final_sentiment_score
+LDF,0.12,75000,520000,22000,4200,15000000,38,32,30,0.58,0.2,0.6,0.65,-0.15,-0.12,-0.1,0.02,-0.2,-0.12,-0.18,0.3,0.7,0.15,57,65,78,36.5,0.1
+UDF,0.35,95000,680000,28000,5800,18500000,52,18,30,0.42,0.75,0.45,0.5,0.1,0.08,0.05,0.05,0.35,0.25,0.2,0.2,0.65,0.25,49,68,81,38.5,0.4
+NDA,0.2,68000,420000,18500,3500,12000000,35,35,30,0.3,0.5,0.4,0.3,0.08,0.03,0.04,-0.08,0.15,0.1,0.08,0.35,0.45,0.3,1,7,17,20.2,0.22
+OTHERS,-0.05,8000,25000,2500,500,800000,10,48,42,0.15,0.25,0.1,0.1,0.0,0.0,0.0,0.0,-0.05,-0.03,0.0,0.0,0.15,0.05,0,0,0,4.8,-0.1

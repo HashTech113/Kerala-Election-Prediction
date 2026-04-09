@@ -5,31 +5,126 @@ An end-to-end machine learning pipeline forecasting the 140 constituencies of th
 ## Professional Project Structure
 
 ```text
-election/
-├── backend/
-│   ├── server.py                 # API server (serves /api/health and /api/predictions)
-│   ├── create_dataset.py         # Generates election dataset CSVs
-│   ├── train.py                  # Trains ensemble + writes predictions
-│   ├── config.py                 # Shared configuration/constants
-│   ├── data/                     # Data processing modules (loaders/extractors)
-│   ├── models/                   # Model architecture modules
-│   ├── utils/                    # Visualization and helper utilities
-│   ├── data_files/               # Generated input datasets for training
-│   │   ├── kerala_assembly_2026.csv
-│   │   ├── kerala_demographics.csv
-│   │   ├── kerala_loksabha_2024.csv
-│   │   ├── kerala_sentiment_2026.csv
-│   │   └── kerala_social_media_2026.csv
-│   ├── checkpoints/              # Trained model checkpoints
-│   ├── predictions_2026.csv      # Final model output used by frontend
-│   └── instagram_post_2026.svg   # Generated static visual
-├── frontend/
-│   ├── index.html                # Frontend dashboard
-│   └── package-lock.json
-├── run.py                        # One-command launcher for backend + frontend
-├── requirements.txt              # Python dependencies
-└── README.md
+kerala-election-prediction/
++-- backend/
+|   +-- config.py                    # Shared backend constants/config
+|   +-- create_dataset.py            # Builds all CSV datasets
+|   +-- train.py                     # Trains ensemble and writes predictions
+|   +-- server.py                    # Backend API (/api/health, /api/predictions)
+|   +-- data/
+|   |   +-- live_collectors.py       # Optional live API collectors
+|   |   +-- sentiment_extractor.py
+|   |   +-- __init__.py
+|   +-- models/
+|   |   +-- __init__.py              # Placeholder for future model modules
+|   +-- utils/
+|   |   +-- __init__.py
+|   +-- data_files/
+|   |   +-- kerala_assembly_2026.csv
+|   |   +-- kerala_demographics.csv
+|   |   +-- kerala_loksabha_2024.csv
+|   |   +-- kerala_sentiment_2026.csv
+|   |   +-- kerala_social_media_2026.csv
+|   +-- checkpoints/                 # Runtime model checkpoints
+|   +-- predictions_2026.csv         # Final model output for frontend
+|   +-- .env.example
+|   +-- __init__.py
++-- frontend/
+|   +-- src/
+|   |   +-- App.tsx
+|   |   +-- index.css
+|   |   +-- main.tsx
+|   |   +-- components/
+|   |   |   +-- AnimatedKpiGrid.tsx
+|   |   |   +-- CompetitiveSeats.tsx
+|   |   |   +-- DistrictBreakdownPanel.tsx
+|   |   |   +-- FilterBar.tsx
+|   |   |   +-- KPISection.tsx
+|   |   |   +-- PartyBadge.tsx
+|   |   |   +-- PredictionTable.tsx
+|   |   |   +-- SeatDistribution.tsx
+|   |   +-- hooks/
+|   |   |   +-- usePredictions.ts
+|   |   +-- services/api.ts
+|   |   +-- types/prediction.ts
+|   |   +-- utils/format.ts
+|   +-- public/assets/owlytics
+|   +-- package.json
+|   +-- vite.config.ts
+|   +-- vercel.json
++-- requirements.txt
++-- run.py
++-- vercel.json                      # Root Vercel config for monorepo-style deploy
++-- README.md
 ```
+
+### Refactor Snapshot
+
+- Removed dead backend modules that were not used at runtime.
+- Fixed broken package imports in `backend/data/__init__.py` and simplified `backend/models/__init__.py`.
+- Split frontend into reusable components and custom hooks (`usePredictions`).
+- Renamed frontend stylesheet entry to `src/index.css` and organized public assets under `public/assets/`.
+- Added Vercel config files for reliable installs/builds in both root and frontend deployment modes.
+
+## Refactoring Report (Integrated Summary)
+
+### Scope
+
+- Comprehensive cleanup of backend/frontend code organization.
+- Dead code and dependency reduction without changing core product behavior.
+- Folder structure normalization and modularization.
+
+### Backend Cleanup Highlights
+
+- Removed legacy/unused backend modules under:
+  - `backend/models/` (old predictor/encoder files)
+  - `backend/data/` (unused dataset/feature/historical files)
+  - `backend/generate_svg.py` (standalone and not integrated in runtime pipeline)
+- Simplified backend configuration layout (`backend/config.py`) to clearer constants-focused usage.
+- Fixed package export hygiene in:
+  - `backend/data/__init__.py`
+  - `backend/models/__init__.py`
+
+### Dependency Cleanup
+
+- Python dependencies reduced from 16 to 8 in `requirements.txt`.
+- Removed libraries marked unused in the report (visualization/scraping/NLP/testing extras).
+- Kept only runtime-required packages for the current pipeline.
+
+### Frontend Refactor Highlights
+
+- Expanded UI into reusable components:
+  - `KPISection`, `FilterBar`, `PredictionTable`, `SeatDistribution`,
+    `DistrictBreakdownPanel`, `CompetitiveSeats`, and `AnimatedKpiGrid`.
+- Added custom hook:
+  - `frontend/src/hooks/usePredictions.ts`
+- Standardized frontend structure:
+  - Styles consolidated in `frontend/src/index.css`
+  - Public assets organized under `frontend/public/assets/`
+
+### Reported Impact Metrics
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Dead code files | 7 | 0 |
+| Unused dependencies | 9 | 0 |
+| Python dependencies | 16 | 8 |
+| Frontend reusable components | 1 | 7+ |
+| Custom hooks | 0 | 1 |
+
+### Verification Status (from report)
+
+- Python modules compile successfully.
+- Frontend production build succeeds.
+- API endpoints and data flow remain functional.
+- No intentional breaking changes to endpoint contract or core business logic.
+
+### Future Recommendations (from report)
+
+1. Add unit tests (especially around `usePredictions` and data transforms).
+2. Enable stricter TypeScript settings and add story-level UI validation.
+3. Add API documentation and stronger typed interfaces across backend modules.
+4. Consider deployment/runtime hardening (env management, containerization).
 
 ### Data File vs Data Folder
 

@@ -42,7 +42,7 @@ export function usePredictions() {
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
         setError(
-          `${message} Ensure backend is running on http://127.0.0.1:8001.`
+          `${message} Check that the backend API is running and accessible.`
         );
       } finally {
         setLoading(false);

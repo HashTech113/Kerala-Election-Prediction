@@ -23,7 +23,7 @@ build/
 
 # ML outputs (large files, regeneratable)
 backend/checkpoints/
-backend/predictions_2026.csv
+# backend/predictions_2026.csv  # KEEP THIS FOR DEPLOYMENT
 backend/instagram_post_2026.svg
 
 # Data files (regeneratable via create_dataset.py)

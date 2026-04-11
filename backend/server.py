@@ -130,7 +130,7 @@ class ElectionAPIHandler(BaseHTTPRequestHandler):
 
 def main(host=None, port=None):
     bind_host = host if host is not None else os.getenv("HOST", "0.0.0.0")
-    bind_port = int(port) if port is not None else int(os.getenv("PORT", "8000"))
+    bind_port = int(port) if port is not None else int(os.getenv("PORT", "8001"))
     server = ThreadingHTTPServer((bind_host, bind_port), ElectionAPIHandler)
     print(f"Backend API running on http://{bind_host}:{bind_port}")
     server.serve_forever()

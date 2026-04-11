@@ -31,16 +31,9 @@ Registered Voters: 26,953,644 (Male: 13,126,048, Female: 13,827,319, TG: 277)
 
 import os
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+_DATASET_DIR = os.path.join(_BACKEND_DIR, "dataset")
 import pandas as pd
 import numpy as np
-from pathlib import Path
-
-from data.live_collectors import (
-    create_sentiment_data_live,
-    create_social_media_details_live,
-    load_env_file,
-)
-from data.sentiment_extractor import SentimentExtractor
 
 # ============================================================================
 # ALL 140 ASSEMBLY CONSTITUENCIES BY DISTRICT
@@ -677,16 +670,68 @@ def get_constituency_district(constituency):
     return None
 
 
+def load_xlsx_enrichment():
+    """Load supplementary data from the dataset/ xlsx files."""
+    dataset_dir = os.path.join(_BACKEND_DIR, "dataset")
+    enrichment = {}
+
+    try:
+        # Constituency master: region_5way and is_reserved from xlsx
+        master = pd.read_excel(os.path.join(dataset_dir, "kerala_constituency_master_2026.xlsx"))
+        enrichment["constituency_master"] = {
+            row["ac_name"]: {"region_5way": row.get("region_5way", ""), "is_reserved": int(row.get("is_reserved", 0))}
+            for _, row in master.iterrows()
+        }
+        print(f"   Loaded constituency master: {len(master)} rows")
+    except Exception as e:
+        print(f"   Warning: Could not load constituency master: {e}")
+        enrichment["constituency_master"] = {}
+
+    try:
+        # Sentiment data from xlsx
+        sent = pd.read_excel(os.path.join(dataset_dir, "kerala_sentiment_analysis_2026.xlsx"))
+        enrichment["sentiment"] = {row["party"]: row.to_dict() for _, row in sent.iterrows()}
+        print(f"   Loaded sentiment data: {len(sent)} parties")
+    except Exception as e:
+        print(f"   Warning: Could not load sentiment: {e}")
+        enrichment["sentiment"] = {}
+
+    try:
+        # Voter turnout data
+        turnout = pd.read_excel(os.path.join(dataset_dir, "kerala_people_yet_to_vote_2026.xlsx"))
+        turnout_dict = {row["metric"]: row["value"] for _, row in turnout.iterrows()}
+        total_voters = turnout_dict.get("yet_to_vote_before_polling_started", 27142952)
+        votes_cast = turnout_dict.get("provisional_votes_cast_polling_day", 21000000)
+        enrichment["turnout_pct"] = votes_cast / total_voters if total_voters > 0 else 0.77
+        print(f"   Loaded turnout data: {enrichment['turnout_pct']:.1%}")
+    except Exception as e:
+        print(f"   Warning: Could not load turnout: {e}")
+        enrichment["turnout_pct"] = 0.77
+
+    try:
+        # First-time voters
+        ftv = pd.read_excel(os.path.join(dataset_dir, "kerala_first_time_voters_2026.xlsx"))
+        enrichment["first_time_voters"] = int(ftv.iloc[0]["count"]) if len(ftv) > 0 else 424518
+        print(f"   Loaded first-time voters: {enrichment['first_time_voters']:,}")
+    except Exception as e:
+        print(f"   Warning: Could not load first-time voters: {e}")
+        enrichment["first_time_voters"] = 424518
+
+    return enrichment
+
+
 def create_constituency_dataset():
     """
-    Create constituency-level dataset for all 140 Assembly constituencies
+    Create constituency-level dataset for all 140 Assembly constituencies.
 
-    Features per constituency:
-    - Historic data (2016, 2021 results)
-    - 2024 Lok Sabha alignment mapping
-    - Social/Economic issues impact scoring
-    - 2026 Predictive Vote Share & Winner Projection
+    Merges hardcoded constituency-level results (2016, 2021, LS2024) with
+    supplementary data from the dataset/ xlsx files.
     """
+
+    # Load enrichment from xlsx files
+    print("   Loading supplementary data from dataset/ xlsx files...")
+    xlsx_data = load_xlsx_enrichment()
+    master_lookup = xlsx_data.get("constituency_master", {})
 
     records = []
 
@@ -810,10 +855,18 @@ def create_constituency_dataset():
                                        "Attingal", "Chirayinkeezhu", "Tarur",
                                        "Kaipamangalam"]
 
+            # Enrichment from xlsx
+            xlsx_info = master_lookup.get(constituency, {})
+            region_5way = xlsx_info.get("region_5way", "")
+            # Use xlsx is_reserved if available, else fallback to hardcoded
+            is_reserved_xlsx = xlsx_info.get("is_reserved", None)
+            final_is_reserved = is_reserved_xlsx if is_reserved_xlsx is not None else (1 if is_sc_st else 0)
+
             records.append({
                 "constituency": constituency,
                 "district": district,
-                "is_reserved": 1 if is_sc_st else 0,
+                "region_5way": region_5way,
+                "is_reserved": final_is_reserved,
                 # 2016 + 2021 results (historical alternation signal)
                 "winner_2016": ASSEMBLY_2016_WINNERS.get(constituency, "UDF"),
                 "winner_2021": winner_2021,
@@ -840,6 +893,8 @@ def create_constituency_dataset():
                 # Issue Sentiments
                 "fin_crisis_impact": round(issues.get("financial_crisis_impact", 0.5), 2),
                 "wildlife_conflict_impact": round(issues.get("wildlife_conflict", 0.0), 2),
+                # Turnout from xlsx
+                "turnout_pct": round(xlsx_data.get("turnout_pct", 0.77), 4),
                 # Demographics
                 "population_density": demo["density"],
                 "literacy_rate": demo["literacy"],
@@ -860,300 +915,49 @@ def create_constituency_dataset():
     return df
 
 
-def create_sentiment_data():
-    """
-    Create sentiment data based on 2024-2026 social media analysis
-
-    Data points from research:
-    - UDF dominates social media sentiment (anti-incumbency narrative)
-    - LDF using AI campaigns (Messi video viral), projecting development
-    - NDA aggressive AI campaign, targeting 20%+ vote share (Amit Shah)
-    - Key issues: Sabarimala gold theft, healthcare negligence, unemployment
-    - Youth voter disillusionment, NOTA consideration trending
-
-    Opinion Poll Consensus (March 2026):
-    - Manorama-CVoter: UDF 69-81, LDF 57-69, NDA 1-5
-    - Overall vote share projection: UDF ~38-40%, LDF ~35-38%, NDA ~19-22%
-
-    Social Media Volume (Jan-Mar 2026):
-    - Twitter/X: 280,000+ election-related posts
-    - Facebook: 2.5M+ engagements on political content
-    - Instagram: 95,000+ reels/posts with election hashtags
-    - LinkedIn: 15,000+ political analysis articles
-    - WhatsApp: Dominant campaign channel (unmeasurable)
-    """
-
-    sentiment_data = {
-        "party": ["LDF", "UDF", "NDA", "OTHERS"],
-
-        # Sentiment from news analysis (Jan-Mar 2026)
-        "news_sentiment": [0.12, 0.35, 0.20, -0.05],
-
-        # Social media metrics (cumulative Jan-Mar 2026)
-        "twitter_mentions": [75000, 95000, 68000, 8000],
-        "facebook_engagement": [520000, 680000, 420000, 25000],
-        "instagram_posts": [22000, 28000, 18500, 2500],
-        "linkedin_articles": [4200, 5800, 3500, 500],
-        "youtube_views": [15000000, 18500000, 12000000, 800000],
-
-        # Sentiment breakdown
-        "positive_mentions_pct": [38, 52, 35, 10],
-        "negative_mentions_pct": [32, 18, 35, 48],
-        "neutral_mentions_pct": [30, 30, 30, 42],
-
-        # Campaign theme scores (0-1)
-        "governance_score": [0.58, 0.42, 0.30, 0.15],
-        "change_sentiment": [0.20, 0.75, 0.50, 0.25],
-        "development_score": [0.60, 0.45, 0.40, 0.10],
-        "welfare_score": [0.65, 0.50, 0.30, 0.10],
-
-        # Issue impact scores (negative = hurts party)
-        "sabarimala_gold_impact": [-0.15, 0.10, 0.08, 0.0],
-        "healthcare_crisis_impact": [-0.12, 0.08, 0.03, 0.0],
-        "unemployment_impact": [-0.10, 0.05, 0.04, 0.0],
-        "fcra_controversy_impact": [0.02, 0.05, -0.08, 0.0],
-
-        # Electoral momentum indicators
-        "ls2024_momentum": [-0.20, 0.35, 0.15, -0.05],
-        "lb2025_momentum": [-0.12, 0.25, 0.10, -0.03],
-        "anti_incumbency_score": [-0.18, 0.20, 0.08, 0.0],
-
-        # Campaign effectiveness
-        "ai_campaign_score": [0.30, 0.20, 0.35, 0.0],
-        "ground_campaign_score": [0.70, 0.65, 0.45, 0.15],
-        "celebrity_endorsement": [0.15, 0.25, 0.30, 0.05],
-
-        # Opinion poll average seat projection
-        "poll_seats_low": [57, 49, 1, 0],
-        "poll_seats_mid": [65, 68, 7, 0],
-        "poll_seats_high": [78, 81, 17, 0],
-
-        # Opinion poll vote share
-        "poll_vote_share": [36.5, 38.5, 20.2, 4.8],
-
-        # Final aggregated sentiment score (-1 to 1)
-        "final_sentiment_score": [0.10, 0.40, 0.22, -0.10]
-    }
-
-    return pd.DataFrame(sentiment_data)
-
-
-def create_social_media_details():
-    """
-    Create detailed social media time-series dataset (Jan 2024 - Apr 2026)
-    Reflecting a gradual decline in LDF sentiment, rise in UDF momentum,
-    and sporadic spikes in NDA engagement surrounding key campaigns.
-    """
-    import datetime
-    from dateutil.relativedelta import relativedelta
-
-    records = []
-    
-    # Base profiles
-    profiles = [
-        {"platform": "Twitter/X", "party": "LDF", "identifier": "#LDFKerala", "base_eng": 15000, "base_sent": 0.40, "trend": -0.01},
-        {"platform": "Twitter/X", "party": "UDF", "identifier": "#UDFKerala", "base_eng": 12000, "base_sent": 0.20, "trend": 0.015},
-        {"platform": "Twitter/X", "party": "NDA", "identifier": "#BJPKerala", "base_eng": 8000, "base_sent": 0.15, "trend": 0.005},
-        {"platform": "Instagram", "party": "LDF", "identifier": "#keralamodel", "base_eng": 50000, "base_sent": 0.45, "trend": -0.015},
-        {"platform": "Instagram", "party": "UDF", "identifier": "#udfkerala2026", "base_eng": 30000, "base_sent": 0.25, "trend": 0.02},
-        {"platform": "Facebook", "party": "LDF", "identifier": "Pinarayi Vijayan Official", "base_eng": 180000, "base_sent": 0.35, "trend": -0.008},
-        {"platform": "Facebook", "party": "UDF", "identifier": "INC Kerala", "base_eng": 90000, "base_sent": 0.25, "trend": 0.018},
-        {"platform": "LinkedIn", "party": "ALL", "identifier": "Kerala Financial Crisis", "base_eng": 2000, "base_sent": -0.10, "trend": -0.02}
-    ]
-
-    start_date = datetime.date(2024, 1, 1)
-    months = 28 # Jan 2024 to April 2026
-    
-    for i in range(months):
-        current_date = start_date + relativedelta(months=i)
-        is_election_year = current_date.year == 2026
-        is_ls_election = current_date.year == 2024 and current_date.month in [3, 4, 5]
-        
-        for p in profiles:
-            # Add time-based engagement multiplier
-            multiplier = 1.0 + (i * 0.05) 
-            if is_ls_election: multiplier *= 2.5
-            if is_election_year: multiplier *= (3.0 + (current_date.month * 0.5))
-            
-            # Add random noise
-            noise_eng = np.random.uniform(0.8, 1.2)
-            noise_sent = np.random.normal(0, 0.05)
-            
-            # Calculate metrics
-            current_eng = int(p["base_eng"] * multiplier * noise_eng)
-            current_sent = round(p["base_sent"] + (p["trend"] * i) + noise_sent, 3)
-            current_sent = max(-1.0, min(1.0, current_sent)) # Clamp between -1 and 1
-            
-            records.append({
-                "date_month": current_date.strftime("%Y-%m"),
-                "platform": p["platform"],
-                "party": p["party"],
-                "identifier": p["identifier"],
-                "engagement_volume": current_eng,
-                "sentiment_score": current_sent
-            })
-
-    return pd.DataFrame(records)
-
-
-def create_opinion_polls():
-    """
-    Create opinion poll dataset from major surveys (March 2026)
-
-    Sources:
-    - Manorama News-CVoter Mega Survey (89,693 respondents, March 14-26)
-    - Mathrubhumi Survey (Feb 16-26, 2026)
-    - Political Vibe Opinion Poll
-    - Poll Mantra Survey (26,000 respondents)
-    """
-
-    polls = [
-        {
-            "source": "Manorama-CVoter",
-            "date": "2026-03-26",
-            "sample_size": 89693,
-            "ldf_seats_low": 57, "ldf_seats_mid": 63, "ldf_seats_high": 69,
-            "udf_seats_low": 69, "udf_seats_mid": 75, "udf_seats_high": 81,
-            "nda_seats_low": 1, "nda_seats_mid": 3, "nda_seats_high": 5,
-            "ldf_vote_share": 35.0, "udf_vote_share": 39.0, "nda_vote_share": 21.0,
-            "projected_winner": "UDF",
-            "notes": "Largest pre-poll survey in Kerala. UDF clear edge."
-        },
-        {
-            "source": "Mathrubhumi",
-            "date": "2026-02-26",
-            "sample_size": 30000,
-            "ldf_seats_low": 60, "ldf_seats_mid": 66, "ldf_seats_high": 72,
-            "udf_seats_low": 56, "udf_seats_mid": 62, "udf_seats_high": 68,
-            "nda_seats_low": 2, "nda_seats_mid": 6, "nda_seats_high": 12,
-            "ldf_vote_share": 37.5, "udf_vote_share": 37.0, "nda_vote_share": 20.5,
-            "projected_winner": "Too Close",
-            "notes": "Tight race, LDF slight edge but within margin of error."
-        },
-        {
-            "source": "Political Vibe",
-            "date": "2026-03-15",
-            "sample_size": 40000,
-            "ldf_seats_low": 59, "ldf_seats_mid": 68, "ldf_seats_high": 78,
-            "udf_seats_low": 49, "udf_seats_mid": 59, "udf_seats_high": 69,
-            "nda_seats_low": 8, "nda_seats_mid": 12, "nda_seats_high": 17,
-            "ldf_vote_share": 39.5, "udf_vote_share": 38.5, "nda_vote_share": 19.0,
-            "projected_winner": "LDF",
-            "notes": "Three-way contest. NDA significant surge. Less than 0.5% gap LDF-UDF."
-        },
-        {
-            "source": "Poll Mantra",
-            "date": "2026-03-20",
-            "sample_size": 26000,
-            "ldf_seats_low": 50, "ldf_seats_mid": 58, "ldf_seats_high": 66,
-            "udf_seats_low": 62, "udf_seats_mid": 72, "udf_seats_high": 82,
-            "nda_seats_low": 4, "nda_seats_mid": 10, "nda_seats_high": 16,
-            "ldf_vote_share": 33.7, "udf_vote_share": 38.2, "nda_vote_share": 20.4,
-            "projected_winner": "UDF",
-            "notes": "UDF clear lead. NDA 20%+ vote share historic."
-        }
-    ]
-
-    return pd.DataFrame(polls)
-
-
 def main():
-    """Create and save all dataset files for 2026 Kerala Assembly Election"""
-
+    """
+    Main pipeline: Load xlsx from dataset/ + constituency ground truth
+    → merge & engineer features → save training CSV to data_files/
+    """
     np.random.seed(42)
-    load_env_file(Path(_BACKEND_DIR) / ".env")
-    use_real_apis = os.getenv("USE_REAL_APIS", "0").strip().lower() in {"1", "true", "yes"}
+    out_dir = os.path.join(_BACKEND_DIR, "data_files")
+    os.makedirs(out_dir, exist_ok=True)
 
-    os.makedirs(os.path.join(_BACKEND_DIR, "data_files"), exist_ok=True)
+    print("=" * 60)
+    print("  KERALA ELECTION 2026 - DATASET CREATION")
+    print("  Source: dataset/*.xlsx + constituency ground truth")
+    print("=" * 60)
 
-    print("=" * 70)
-    print("KERALA ASSEMBLY ELECTION 2026 - DATASET CREATION")
-    print("Election Date: 9 April 2026 | Results: 4 May 2026")
-    print("140 Constituencies | Majority: 71 seats")
-    print(f"Data mode: {'LIVE APIs' if use_real_apis else 'Mock/Static'}")
-    print("=" * 70)
+    # ── Step 1: Build constituency-level training dataset ──────
+    print("\n[1/2] Building constituency features (140 seats)...")
+    df = create_constituency_dataset()
+    csv_path = os.path.join(out_dir, "kerala_assembly_2026.csv")
+    df.to_csv(csv_path, index=False)
+    print(f"  Saved: {csv_path}")
 
-    # 1. Constituency dataset
-    print("\n1. Creating constituency-level dataset (140 seats)...")
-    constituency_df = create_constituency_dataset()
-    constituency_df.to_csv(os.path.join(_BACKEND_DIR, "data_files/kerala_assembly_2026.csv"), index=False)
-    print(f"   Saved: data_files/kerala_assembly_2026.csv ({len(constituency_df)} records)")
-
-    social_df = None
-    sentiment_df = None
-    if use_real_apis:
-        print("\n2. Collecting social/news data from live APIs...")
-        try:
-            sentiment_extractor = SentimentExtractor(config=None)
-            social_df = create_social_media_details_live(
-                sentiment_extractor,
-                from_date="2024-01-01",
-            )
-            if social_df.empty:
-                raise RuntimeError("Live social data is empty (check API keys/quotas).")
-
-            sentiment_df = create_sentiment_data_live(social_df)
-            if sentiment_df.empty:
-                raise RuntimeError("Live sentiment summary is empty.")
-            print(f"   Live records: {len(social_df)}")
-        except Exception as exc:
-            print(f"   Live API collection failed: {exc}")
-            print("   Falling back to mock/static generators.")
-            social_df = create_social_media_details()
-            sentiment_df = create_sentiment_data()
-    else:
-        # Mock/static mode
-        sentiment_df = create_sentiment_data()
-        social_df = create_social_media_details()
-
-    # 2b. Save sentiment data
-    print("\n2. Creating sentiment data (social media + news analysis)...")
-    sentiment_df.to_csv(os.path.join(_BACKEND_DIR, "data_files/kerala_sentiment_2026.csv"), index=False)
-    print(f"   Saved: data_files/kerala_sentiment_2026.csv ({len(sentiment_df)} parties)")
-
-    # 3. Demographics
-    print("\n3. Creating demographics data...")
+    # ── Step 2: Save demographics reference ────────────────────
+    print("\n[2/2] Saving demographics reference...")
     demo_df = pd.DataFrame.from_dict(DEMOGRAPHICS, orient='index')
     demo_df.index.name = 'district'
     demo_df.reset_index(inplace=True)
-    demo_df.to_csv(os.path.join(_BACKEND_DIR, "data_files/kerala_demographics.csv"), index=False)
-    print(f"   Saved: data_files/kerala_demographics.csv ({len(demo_df)} districts)")
+    demo_df.to_csv(os.path.join(out_dir, "kerala_demographics.csv"), index=False)
 
-    # 4. 2024 LS results
-    print("\n4. Creating Lok Sabha 2024 results...")
-    ls_records = []
-    for name, data in LOK_SABHA_2024.items():
-        ls_records.append({"constituency": name, **data})
-    ls_df = pd.DataFrame(ls_records)
-    ls_df.to_csv(os.path.join(_BACKEND_DIR, "data_files/kerala_loksabha_2024.csv"), index=False)
-    print(f"   Saved: data_files/kerala_loksabha_2024.csv ({len(ls_df)} LS constituencies)")
-
-    # 5. Social media details
-    print("\n5. Creating social media data (X, Facebook, Instagram, LinkedIn)...")
-    social_df.to_csv(os.path.join(_BACKEND_DIR, "data_files/kerala_social_media_2026.csv"), index=False)
-    print(f"   Saved: data_files/kerala_social_media_2026.csv ({len(social_df)} records)")
-
-    # Removed opinion polls as requested.
-
-    # Summary
-    print("\n" + "=" * 70)
-    print("DATASET SUMMARY")
-    print("=" * 70)
-
-    print(f"\nConstituencies: {len(constituency_df)}")
-    print(f"\n2021 Assembly Results:")
-    print(constituency_df['winner_2021'].value_counts().to_string())
-
-    print(f"\nDistrict-wise seat count:")
-    print(constituency_df.groupby('district').size().to_string())
-
-    print(f"\nSocial media sources: {social_df['platform'].nunique()} platforms")
-    print(social_df.groupby('platform').size().to_string())
-
-    # Removed opinion polls summary
-
-    print(f"\nTotal registered voters: 26,953,644")
-    print(f"Key date: 9 April 2026 (Polling) | 4 May 2026 (Results)")
+    # ── Summary ────────────────────────────────────────────────
+    print("\n" + "=" * 60)
+    print("  DATASET SUMMARY")
+    print("=" * 60)
+    print(f"  Constituencies: {len(df)}")
+    print(f"  Features: {df.shape[1]} columns")
+    print(f"\n  2021 results:")
+    for party, n in df['winner_2021'].value_counts().items():
+        print(f"    {party}: {n} seats")
+    print(f"\n  2026 projected winners:")
+    for party, n in df['proj_2026_winner'].value_counts().items():
+        print(f"    {party}: {n} seats")
+    print(f"\n  Districts: {df['district'].nunique()}")
+    print(f"  Reserved seats: {int(df['is_reserved'].sum())}")
+    print(f"\n  Next step: python train.py")
 
 
 if __name__ == "__main__":

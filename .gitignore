@@ -1,47 +1,62 @@
-# Python
+# ============================================================================
+# PYTHON ENVIRONMENT & CACHING
+# ============================================================================
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 .Python
-
-# Virtual environment
-.venv/
-venv/
-env/
-
-# Environment variables (NEVER commit actual secrets)
-.env
-.env.local
-.env.*.local
-*.env
-
-# Distribution / packaging
 *.egg-info/
 dist/
 build/
 
-# ML outputs (large files, regeneratable)
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ============================================================================
+# ENVIRONMENT & SECRETS (NEVER COMMIT)
+# ============================================================================
+.env
+.env.local
+.env.*.local
+.env.production
+
+# ============================================================================
+# ML MODEL CHECKPOINTS (Large files, regeneratable)
+# ============================================================================
 backend/checkpoints/
-# backend/predictions_2026.csv  # KEEP THIS FOR DEPLOYMENT
-backend/instagram_post_2026.svg
 
-# Data files (regeneratable via create_dataset.py)
-# Uncomment the line below if you don't want to track generated CSVs
-# backend/data_files/
-
-# Logs & misc
+# ============================================================================
+# LOGS & TEMPORARY FILES
+# ============================================================================
 *.log
 .DS_Store
 Thumbs.db
+*.tmp
+*.bak
 
-# IDE / editor
+# ============================================================================
+# IDE & EDITOR
+# ============================================================================
 .vscode/
 .idea/
+*.swp
+*.swo
+.vs/
 
-# Frontend build/deps
+# ============================================================================
+# FRONTEND BUILD ARTIFACTS
+# ============================================================================
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
 
-# Claude Code
-.claude/
+# ============================================================================
+# KEEP THESE FOR DEPLOYMENT (Production artifacts)
+# ============================================================================
+# backend/predictions_2026.csv ✓ INCLUDED
+# backend/data_files/kerala_*.csv ✓ INCLUDED
+# DO NOT ignore these - they are needed for Railway deployment

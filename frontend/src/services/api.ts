@@ -6,13 +6,19 @@ import { HealthResponse, PredictionRow, PredictionsMeta } from "../types/predict
  * 1. VITE_API_BASE_URL (preferred)
  * 2. VITE_API_URL (fallback)
  * 3. Default to http://127.0.0.1:8001 if neither is set
+ * Trailing slashes are removed automatically to avoid `//api/...` requests.
  *
  * For production (Railway): Set VITE_API_BASE_URL to your Railway backend URL
  * For local dev: Use .env with VITE_API_BASE_URL=http://127.0.0.1:8001
  */
+function normalizeApiBase(rawValue: string | undefined): string {
+  if (!rawValue) return "";
+  return rawValue.trim().replace(/\/+$/, "");
+}
+
 const API_BASE =
-  import.meta.env.VITE_API_BASE_URL?.trim() ||
-  import.meta.env.VITE_API_URL?.trim() ||
+  normalizeApiBase(import.meta.env.VITE_API_BASE_URL) ||
+  normalizeApiBase(import.meta.env.VITE_API_URL) ||
   "http://127.0.0.1:8001";
 
 const EXPECTED_PREDICTIONS_SHA256 =

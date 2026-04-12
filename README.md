@@ -457,8 +457,7 @@ Get-FileHash backend/predictions_2026.csv -Algorithm SHA256
 - `seat_counts` should match exactly
 4. If they differ:
 - Redeploy Railway backend from latest commit
-- Update Vercel env `VITE_EXPECTED_PREDICTIONS_SHA256` with the deployed `/api/predictions/meta` hash
-- Redeploy Vercel frontend
+- Redeploy Vercel frontend from latest commit (build now auto-syncs expected hash/version from `backend/`)
 
 ### Environment Variable Issues
 
@@ -561,14 +560,13 @@ In Vercel project settings -> Environment Variables, set:
 
 ```env
 VITE_API_BASE_URL=https://<railway-domain>
-VITE_EXPECTED_API_VERSION=2026-04-12.1
-VITE_EXPECTED_PREDICTIONS_SHA256=<value from /api/predictions/meta source_sha256>
 ```
 
 Note:
 - Frontend also accepts `VITE_API_URL` as an alias.
 - No trailing slash needed.
-- If `VITE_EXPECTED_PREDICTIONS_SHA256` is set, frontend will block stale backend data automatically.
+- `VITE_EXPECTED_PREDICTIONS_SHA256` and `VITE_EXPECTED_API_VERSION` are now auto-generated during Vercel build from `backend/predictions_2026.csv` and `backend/server.py`.
+- You can still set those two vars manually in Vercel to override the auto-generated values.
 
 Then redeploy Vercel frontend.
 

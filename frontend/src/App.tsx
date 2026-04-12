@@ -67,7 +67,8 @@ function validatePredictionMeta(meta: PredictionsMeta): string | null {
     (!meta.source_sha256 ||
       meta.source_sha256.toLowerCase() !== EXPECTED_PREDICTIONS_SHA256.toLowerCase())
   ) {
-    return "Backend predictions file hash does not match this frontend deployment. Redeploy backend or update frontend env.";
+    const actualHash = meta.source_sha256 ? meta.source_sha256.toLowerCase() : "missing";
+    return `Backend predictions hash mismatch. Expected ${EXPECTED_PREDICTIONS_SHA256}, got ${actualHash}. Redeploy backend and frontend from the same commit.`;
   }
 
   return null;

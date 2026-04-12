@@ -15,6 +15,11 @@ const API_BASE =
   import.meta.env.VITE_API_URL?.trim() ||
   "http://127.0.0.1:8001";
 
+function withCacheBuster(path: string): string {
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}_ts=${Date.now()}`;
+}
+
 // Debug logging (helpful for troubleshooting)
 if (import.meta.env.DEV) {
   console.log(
@@ -48,7 +53,10 @@ validateApiConfig();
 
 export async function checkHealth(signal?: AbortSignal): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE}/api/health`, { signal });
+    const response = await fetch(withCacheBuster(`${API_BASE}/api/health`), {
+      signal,
+      cache: "no-store",
+    });
     if (!response.ok) {
       console.warn(
         `[API] Health check failed: ${response.status} ${response.statusText}`
@@ -65,11 +73,21 @@ export async function checkHealth(signal?: AbortSignal): Promise<boolean> {
 
 export async function fetchPredictions(signal?: AbortSignal): Promise<PredictionRow[]> {
   try {
-    const response = await fetch(`${API_BASE}/api/predictions`, { signal });
+    const response = await fetch(withCacheBuster(`${API_BASE}/api/predictions`), {
+      signal,
+      cache: "no-store",
+    });
     if (!response.ok) {
       const errorMsg = `Failed to load predictions (${response.status} ${response.statusText}) from ${API_BASE}`;
       console.error("[API]", errorMsg);
       throw new Error(errorMsg);
+    }
+    const source = response.headers.get("X-Predictions-Source");
+    const fallback = response.headers.get("X-Predictions-Fallback") === "1";
+    if (source) {
+      console.info(
+        `[API] Predictions source: ${source}${fallback ? " (fallback mode)" : ""}`
+      );
     }
     const data: PredictionRow[] = await response.json();
     return data;

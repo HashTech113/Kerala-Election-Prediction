@@ -2,7 +2,75 @@
 
 An end-to-end machine learning pipeline forecasting the 140 constituencies of the 2026 Kerala Legislative Assembly Elections.
 
-## Professional Project Structure
+---
+
+## Table of Contents
+
+1. [Project Overview](#project-overview)
+2. [How We Predict Elections](#how-we-predict-elections)
+3. [Project Structure](#project-structure)
+4. [Local Development Setup](#local-development-setup)
+5. [Running the Application](#running-the-application)
+6. [Railway Deployment](#railway-deployment)
+7. [Troubleshooting](#troubleshooting)
+
+---
+
+## Project Overview
+
+This project simulates and predicts electoral outcomes by fusing historical results, parliamentary momentum, local body trends, demographic data, and regional political issues.
+
+The pipeline consists of two main components:
+1. **`create_dataset.py`**: A heuristic engine that synthesizes a comprehensive 43-feature dataset for all 140 constituencies.
+2. **`train.py`**: A Neural Network pipeline that trains on these features to predict winning alliances and vote shares.
+
+### Key Features
+- **Ensemble Learning**: 15 independent models voting on predictions
+- **Vote Share Prediction**: Not just winner prediction, but exact vote percentages
+- **Attention to Rare Events**: Special training techniques for underrepresented outcomes
+- **Full-Stack Application**: Python backend API + React/TypeScript frontend dashboard
+
+---
+
+## How We Predict Elections
+
+Predicting elections with data is challenging—especially in Kerala, where there are only 140 constituencies and dominant parties (LDF and UDF) win almost every seat.
+
+### Strategy 1: The "Wisdom of Crowds" (Ensemble Learning)
+
+Because our dataset is incredibly small (only 140 rows), training just one AI model is risky. It might memorize the data instead of learning real patterns.
+
+**Solution**: Train **15 separate models** on different randomized slices of the state. When predicting final results, all 15 models vote on the outcome. Averaging their predictions gives a much more stable and reliable forecast.
+
+### Strategy 2: Predicting the Score, Not Just the Winner
+
+If we only ask the AI to predict "Who wins?", it will rarely see NDA victories and won't learn what success looks like for third parties.
+
+**Solution**: We ask the AI to do two things:
+- Predict the winning party
+- Predict the **exact vote share percentage** for every party
+
+Because every party gets *some* vote share in every constituency, the AI constantly learns what makes a party perform well, even where they ultimately lose.
+
+### Strategy 3: Paying Extra Attention to Rare Events
+
+An AI naturally ignores rare events (like an independent candidate winning) to focus on common patterns.
+
+**Solution**: During training, we use specialized math techniques that force the AI to pay extra attention to these incredibly rare scenarios.
+
+### A Word on Model Logic
+
+Usually, true predictive AI feeds on historical data paired with outcomes. However, we don't have perfectly paired historical data stretching back decades.
+
+Our dataset builder (`create_dataset.py`) acts as a **human logic engine**: it takes recent data (2021 results, 2024 parliamentary momentum, etc.) and uses documented political science formulas to estimate a "projected truth."
+
+Our neural network then **learns to deeply mimic that political human logic**, smoothing out the hard math and finding hidden relationships between demographics, geography, and political momentum. It acts as an incredible digital strategist applying complex political logic statewide.
+
+---
+
+## Project Structure
+
+## Project Structure
 
 ```text
 kerala-election-prediction/
@@ -22,12 +90,10 @@ kerala-election-prediction/
 |   +-- data_files/
 |   |   +-- kerala_assembly_2026.csv
 |   |   +-- kerala_demographics.csv
-|   |   +-- kerala_loksabha_2024.csv
 |   |   +-- kerala_sentiment_2026.csv
-|   |   +-- kerala_social_media_2026.csv
+|   |   +-- [other data CSVs...]
 |   +-- checkpoints/                 # Runtime model checkpoints
 |   +-- predictions_2026.csv         # Final model output for frontend
-|   +-- .env.example
 |   +-- __init__.py
 +-- frontend/
 |   +-- src/
@@ -51,152 +117,379 @@ kerala-election-prediction/
 |   +-- public/assets/owlytics
 |   +-- package.json
 |   +-- vite.config.ts
-|   +-- vercel.json
+|   +-- railway.json
 +-- requirements.txt
 +-- run.py
-+-- vercel.json                      # Root Vercel config for monorepo-style deploy
++-- Procfile
 +-- README.md
 ```
 
-### Refactor Snapshot
+### Recent Refactoring
 
-- Removed dead backend modules that were not used at runtime.
-- Fixed broken package imports in `backend/data/__init__.py` and simplified `backend/models/__init__.py`.
-- Split frontend into reusable components and custom hooks (`usePredictions`).
-- Renamed frontend stylesheet entry to `src/index.css` and organized public assets under `public/assets/`.
-- Added Vercel config files for reliable installs/builds in both root and frontend deployment modes.
+- Removed dead backend modules and unused dependencies
+- Split frontend into 7+ reusable components and custom hooks
+- Fixed package imports and organized public assets
+- Reduced Python dependencies from 16 to 8
+- Added proper Vercel/Railway configuration files
 
-## Refactoring Report (Integrated Summary)
+---
 
-### Scope
+## Local Development Setup
 
-- Comprehensive cleanup of backend/frontend code organization.
-- Dead code and dependency reduction without changing core product behavior.
-- Folder structure normalization and modularization.
+### 1. Clone & Initial Setup
 
-### Backend Cleanup Highlights
-
-- Removed legacy/unused backend modules under:
-  - `backend/models/` (old predictor/encoder files)
-  - `backend/data/` (unused dataset/feature/historical files)
-  - `backend/generate_svg.py` (standalone and not integrated in runtime pipeline)
-- Simplified backend configuration layout (`backend/config.py`) to clearer constants-focused usage.
-- Fixed package export hygiene in:
-  - `backend/data/__init__.py`
-  - `backend/models/__init__.py`
-
-### Dependency Cleanup
-
-- Python dependencies reduced from 16 to 8 in `requirements.txt`.
-- Removed libraries marked unused in the report (visualization/scraping/NLP/testing extras).
-- Kept only runtime-required packages for the current pipeline.
-
-### Frontend Refactor Highlights
-
-- Expanded UI into reusable components:
-  - `KPISection`, `FilterBar`, `PredictionTable`, `SeatDistribution`,
-    `DistrictBreakdownPanel`, `CompetitiveSeats`, and `AnimatedKpiGrid`.
-- Added custom hook:
-  - `frontend/src/hooks/usePredictions.ts`
-- Standardized frontend structure:
-  - Styles consolidated in `frontend/src/index.css`
-  - Public assets organized under `frontend/public/assets/`
-
-### Reported Impact Metrics
-
-| Metric | Before | After |
-|--------|--------|-------|
-| Dead code files | 7 | 0 |
-| Unused dependencies | 9 | 0 |
-| Python dependencies | 16 | 8 |
-| Frontend reusable components | 1 | 7+ |
-| Custom hooks | 0 | 1 |
-
-### Verification Status (from report)
-
-- Python modules compile successfully.
-- Frontend production build succeeds.
-- API endpoints and data flow remain functional.
-- No intentional breaking changes to endpoint contract or core business logic.
-
-### Future Recommendations (from report)
-
-1. Add unit tests (especially around `usePredictions` and data transforms).
-2. Enable stricter TypeScript settings and add story-level UI validation.
-3. Add API documentation and stronger typed interfaces across backend modules.
-4. Consider deployment/runtime hardening (env management, containerization).
-
-### Data File vs Data Folder
-
-- `backend/data/`:
-  - Python source code modules for data processing (not CSV data).
-  - Example: feature extraction, historical loader, sentiment extractor.
-- `backend/data_files/`:
-  - Generated CSV datasets used by training.
-  - These are the structured input data artifacts.
-- `backend/predictions_2026.csv`:
-  - Final prediction output consumed by the frontend via backend API.
-
-## Overview
-
-This project simulates and predicts the electoral outcomes by fusing historical results, parliamentary momentum, local body trends, demographic data, and regional political issues. 
-
-The pipeline consists of two main components:
-1. **`create_dataset.py`**: A heuristic engine that synthesizes a comprehensive 43-feature dataset for all 140 constituencies. It combines baseline 2021 results with 2024 Lok Sabha momentum, 2025 Local Body trends, demographic makeup, and constituency-specific issue impacts to generate projected vote shares.
-2. **`train.py`**: A robust Neural Network pipeline that trains on these features to predict the winning alliance (LDF, UDF, NDA, OTHERS) and exact vote shares.
-
-## How We Predict the Election
-
-Predicting elections with data is challenging—especially in Kerala, where there are only 140 constituencies (which means a very small dataset) and where the dominant parties (LDF and UDF) win almost every seat, making it incredibly hard for an AI to learn how third fronts like the NDA or independent candidates might win.
-
-To tackle these unique challenges, our approach uses a few clever strategies:
-
-### 1. The "Wisdom of Crowds" (Ensemble Learning)
-Because our dataset is incredibly small (only 140 rows), training just one AI model is risky. It might just memorize the data instead of learning real patterns. To fix this, we train **15 separate models** on different randomized slices of the state. When predicting the final results, we ask all 15 models to vote on the outcome. By averaging their predictions together, we get a much more stable, reliable, and highly confident forecast.
-
-### 2. Predicting the Score, Not Just the Winner
-Historically, the NDA rarely wins seats in Kerala. If we only ask the AI to predict "Who wins?", it will almost never see enough examples to effectively learn what an NDA victory looks like. 
-
-Instead, we ask the AI to do two things at once:
-* Predict the winning party.
-* Predict the **exact vote share percentage** for every party.
-
-Because every party gets *some* vote share in every constituency, the AI constantly learns what makes a party perform well, even in places where they ultimately lose. By learning how to calculate vote shares, the model organically figures out how traditional strongholds might tip toward a third party in extremely close races.
-
-### 3. Paying Extra Attention to Rare Events
-If left to its own devices, an AI will naturally ignore rare events (like an independent candidate winning a seat) to focus on the big, common patterns. During training, we use specialized math techniques that force the AI to pay extra attention to these incredibly rare scenarios, keeping it from taking the easy way out and predicting LDF/UDF every single time.
-
-## A Word on How the Model Thinks
-
-It's important to understand what this AI is actually doing behind the scenes. 
-
-Usually, to build a "true" predictive AI, you feed it historical data (like 2011 election factors) and ask it to predict the 2016 outcome. Once it learns those rules against hard historical truth, you use it to predict the future. 
-
-However, because we don't have perfectly paired historical data stretching back decades, we had to be creative. Our dataset builder (`create_dataset.py`) acts as a **human logic engine**: it takes the most recent available data (2021 results, 2024 parliamentary momentum, etc.) and uses documented political science formulas to estimate a "projected truth." 
-
-Our neural network then trains on this data. What it's actually doing is **learning to deeply mimic that political human logic**, smoothing out the hard math, and finding hidden relationships between demographics, geography, and political momentum. It acts as an incredible digital strategist applying complex political logic statewide, rather than an independent crystal ball.
-
-## Usage
-
-Generate the dataset:
 ```bash
-python backend/create_dataset.py
+git clone https://github.com/your-user/kerala-election-prediction.git
+cd kerala-election-prediction
 ```
 
-Train the ensemble and output predictions:
+### 2. Create Python Virtual Environment
+
 ```bash
+# Windows
+python -m venv .venv
+.venv\Scripts\activate
+
+# Mac/Linux
+python -m venv .venv
+source .venv/bin/activate
+
+# Install Python dependencies
+pip install -r requirements.txt
+```
+
+### 3. Create Backend .env
+
+From the `backend/` directory:
+```bash
+cp .env.example .env
+```
+
+Edit `backend/.env`:
+```
+PORT=8001
+HOST=127.0.0.1
+USE_REAL_APIS=0
+```
+
+### 4. Create Frontend .env
+
+From the `frontend/` directory:
+```bash
+cp .env.example .env
+```
+
+Edit `frontend/.env`:
+```
+VITE_API_BASE_URL=http://127.0.0.1:8001
+```
+
+### 5. Install Frontend Dependencies
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### Important Rules ✅
+
+| File | Rule | Why |
+|------|------|-----|
+| `.env` | ❌ Never commit | Contains secrets & API keys |
+| `.env.example` | ✅ Always commit | Shows team what variables are needed |
+| `.venv/` | ❌ Never commit | Too large, everyone creates their own |
+| `.gitignore` | ✅ Always commit | Protects `.env` & `.venv` |
+
+---
+
+## Running the Application
+
+### Local Development (Both Services)
+
+**Terminal 1 - Backend:**
+```bash
+# Make sure .venv is activated
+python backend/server.py
+```
+
+**Terminal 2 - Frontend:**
+```bash
+cd frontend
+npm run dev
+```
+
+Then visit: `http://localhost:5173`
+
+### Just the Backend API
+
+```bash
+python backend/server.py
+# Available at http://127.0.0.1:8001
+# - GET /api/health
+# - GET /api/predictions
+```
+
+### Just the Frontend
+
+```bash
+cd frontend
+npm run dev
+```
+
+### Building for Production
+
+**Backend:** No build needed (pure Python)
+
+**Frontend:**
+```bash
+cd frontend
+npm run build
+# Output: dist/ folder
+```
+
+### Generate Predictions Dataset
+
+By default, predictions are pre-computed in `backend/predictions_2026.csv`.
+
+To regenerate:
+```bash
+# 1. Build dataset features
+python backend/create_dataset.py
+
+# 2. Train models and save predictions
 python backend/train.py
 ```
 
-The final output is saved to `backend/predictions_2026.csv`.
+---
 
-## Frontend + Backend (Single Command)
+## Railway Deployment
 
-This project now includes:
-- `frontend/` for dashboard UI
-- `backend/` for API (`/api/predictions`)
+### Prerequisites
 
-Run both with one command:
+- Railway account (https://railway.app)
+- Git repository initialized
+- Local build works: `npm run build` (frontend) and dataset/model files built (backend)
+- `predictions_2026.csv` exists in `backend/`
+
+### Step 1: Create Railway Projects
+
+```bash
+# Log in to Railway
+npx -y @railway/cli login
+
+# Link to workspace
+npx -y @railway/cli link
+```
+
+Create TWO projects in Railway Dashboard:
+- `kerala-election-backend` (Python backend)
+- `kerala-election-frontend` (React frontend)
+
+### Step 2: Configure Backend Environment Variables
+
+In Railway Dashboard → Backend Project → Variables:
+
+```
+PORT=8000
+HOST=0.0.0.0
+USE_REAL_APIS=0
+```
+
+Optional (for live data):
+```
+X_BEARER_TOKEN=your_token
+YOUTUBE_API_KEY=your_key
+NEWS_API_KEY=your_key
+```
+
+### Step 3: Get Backend Public URL
+
+In Railway Dashboard → Backend Project → Deployments:
+Copy the public URL (format: `https://xxxxx.up.railway.app`)
+
+### Step 4: Configure Frontend Environment Variables
+
+In Railway Dashboard → Frontend Project → Variables:
+
+```
+VITE_API_BASE_URL=https://[YOUR_BACKEND_URL]
+```
+
+Replace `[YOUR_BACKEND_URL]` with your actual backend Railway URL from Step 3.
+
+### Step 5: Deploy
+
+```bash
+git push origin main
+```
+
+Railway auto-deploys when connected. Watch the deployments in the dashboard.
+
+### Step 6: Verify Deployment
+
+**Test Backend Health:**
+```
+https://[YOUR_BACKEND_URL]/api/health
+```
+Should return: `{"status": "ok"}`
+
+**Test Predictions:**
+```
+https://[YOUR_BACKEND_URL]/api/predictions
+```
+
+**Open Frontend:**
+```
+https://[YOUR_FRONTEND_URL]
+```
+Should load the election dashboard with data.
+
+### Environment Variables Reference
+
+| Variable | Component | Value | Where to Set |
+|----------|-----------|-------|--------------|
+| `PORT` | Backend | `8000` | Railway Dashboard |
+| `HOST` | Backend | `0.0.0.0` | Railway Dashboard |
+| `VITE_API_BASE_URL` | Frontend | `https://your-backend.up.railway.app` | Railway Dashboard |
+
+### Railway Deployment Files
+
+| File | Purpose |
+|------|---------|
+| `Procfile` | Tells Railway how to start backend |
+| `frontend/railway.json` | Tells Railway how to build frontend |
+| `requirements.txt` | Python dependencies |
+| `frontend/package.json` | Node dependencies |
+
+---
+
+## Troubleshooting
+
+### Python/Backend Issues
+
+#### "Cannot find module X"
+```bash
+# Ensure virtual environment is activated
+.venv\Scripts\activate  # Windows
+
+# Reinstall packages
+pip install -r requirements.txt
+```
+
+#### Backend not responding locally
+```bash
+# Make sure backend is running
+python backend/server.py
+
+# Check it's accessible
+curl http://127.0.0.1:8001/api/health
+```
+
+#### Backend won't start on Railway
+```bash
+# Check logs
+npx -y @railway/cli logs --service backend
+```
+
+**Solution:** Verify `PORT=8000` and `HOST=0.0.0.0` in Railway Dashboard
+
+### Frontend/React Issues
+
+#### Frontend shows "Backend Error"
+1. Check backend is running: `python backend/server.py`
+2. Verify `VITE_API_BASE_URL` in `frontend/.env` is correct
+3. Test backend directly in browser: `http://127.0.0.1:8001/api/health`
+4. Check browser console (F12) for detailed errors
+
+#### Frontend can't reach backend on Railway
+1. Verify `VITE_API_BASE_URL` exactly matches your backend Railway URL
+2. Test the URL directly in browser
+3. Check browser console (F12 → Console tab) for CORS errors
+4. Backend CORS headers are configured—should allow all origins
+
+#### "Cannot compile" or build errors
+```bash
+cd frontend
+npm run build
+# Check output for specific errors
+```
+
+### Data Issues
+
+#### "Cannot find predictions_2026.csv"
+
+**Local:**
+```bash
+python backend/create_dataset.py
+python backend/train.py
+```
+
+**On Railway:** Commit the generated file to git:
+```bash
+git add backend/predictions_2026.csv
+git commit -m "Add pre-generated predictions"
+git push origin main
+```
+
+#### Data not showing in frontend
+1. Verify `backend/predictions_2026.csv` exists
+2. Test `/api/predictions` endpoint directly
+3. Check browser console for parse errors
+
+### Environment Variable Issues
+
+#### .env file not found
+```bash
+# Create from template
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+
+# Then edit with your values
+nano backend/.env
+nano frontend/.env
+```
+
+#### Variables not being read
+- **Frontend**: Make sure to use `VITE_` prefix for environment variables
+- **Backend**: Make sure to use `os.environ.get("VARIABLE_NAME")`
+- Restart dev servers after changing `.env` files
+
+### General Debugging
+
+**Check logs locally:**
+```bash
+python backend/server.py  # Shows all prints and errors
+```
+
+**Check logs on Railway:**
+```bash
+npx -y @railway/cli logs --service backend
+npx -y @railway/cli logs --service frontend
+```
+
+**Test API endpoints:**
+```bash
+# Health check
+curl http://127.0.0.1:8001/api/health
+
+# Get predictions
+curl http://127.0.0.1:8001/api/predictions
+```
+
+---
+
+## Summary
+
+✅ `.env.example` = Share with team (template)  
+❌ `.env` = Keep private (your secrets)  
+❌ `.venv/` = Never commit (recreate locally)  
+✅ `.gitignore` = Protects secrets automatically  
+✅ `predictions_2026.csv` = Commit to git (pre-generated predictions)
+
+---
+
+**Questions?** Check the troubleshooting section above or review logs for specific error messages.
 
 ```bash
 python run.py
@@ -231,6 +524,13 @@ git push
 Backend must respond at:
 - `https://<railway-domain>/api/health`
 - `https://<railway-domain>/api/predictions`
+- `https://<railway-domain>/api/predictions/meta`
+
+Important:
+- Production now requires `backend/predictions_2026.csv` by default.
+- If that file is missing, API returns an error instead of silently serving fallback data.
+- Optional override for debugging only:
+  - `ALLOW_ASSEMBLY_FALLBACK=1`
 
 ### 3. Connect Vercel frontend to Railway backend
 

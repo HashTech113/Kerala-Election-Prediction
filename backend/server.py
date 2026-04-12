@@ -4,10 +4,24 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
+from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parent
 PREDICTIONS_FILE = ROOT / "predictions_2026.csv"
 ASSEMBLY_FALLBACK_FILE = ROOT / "data_files" / "kerala_assembly_2026.csv"
+PARTIES = ("LDF", "UDF", "NDA", "OTHERS")
+NO_STORE_CACHE_HEADER = "no-store, no-cache, must-revalidate, max-age=0"
+CORS_ALLOWED_HEADERS = "Content-Type, Cache-Control, Pragma"
+
+
+def _env_flag(name, default=False):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+ALLOW_ASSEMBLY_FALLBACK = _env_flag("ALLOW_ASSEMBLY_FALLBACK", default=False)
 
 
 def _to_float(value, default=0.0):
@@ -76,43 +90,118 @@ def _load_rows_from_assembly_fallback():
     return rows
 
 
+def _iso_mtime_utc(path: Path):
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
+    except FileNotFoundError:
+        return None
+
+
+def _seat_counts(rows):
+    counts = {party: 0 for party in PARTIES}
+    for row in rows:
+        predicted = row.get("predicted")
+        if predicted in counts:
+            counts[predicted] += 1
+    return counts
+
+
+def _build_predictions_meta(rows, source_file: Path, fallback_in_use: bool):
+    counts = _seat_counts(rows)
+    projected_winner = "-"
+    if rows:
+        projected_winner = max(PARTIES, key=lambda party: counts[party])
+    return {
+        "source_file": source_file.name,
+        "source_path": str(source_file),
+        "source_last_modified_utc": _iso_mtime_utc(source_file),
+        "fallback_in_use": fallback_in_use,
+        "allow_assembly_fallback": ALLOW_ASSEMBLY_FALLBACK,
+        "total_constituencies": len(rows),
+        "seat_counts": counts,
+        "projected_winner": projected_winner,
+    }
+
+
 class ElectionAPIHandler(BaseHTTPRequestHandler):
     server_version = "ElectionAPI/1.0"
 
-    def _send_json(self, payload, status=200):
+    def _send_json(self, payload, status=200, extra_headers=None):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", CORS_ALLOWED_HEADERS)
+        self.send_header("Cache-Control", NO_STORE_CACHE_HEADER)
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        if extra_headers:
+            for key, value in extra_headers.items():
+                self.send_header(key, str(value))
         self.end_headers()
         self.wfile.write(body)
 
     def _load_predictions(self):
         if PREDICTIONS_FILE.exists():
-            return _load_rows_from_predictions_file()
-        return _load_rows_from_assembly_fallback()
+            return _load_rows_from_predictions_file(), PREDICTIONS_FILE, False
+
+        if ALLOW_ASSEMBLY_FALLBACK:
+            return _load_rows_from_assembly_fallback(), ASSEMBLY_FALLBACK_FILE, True
+
+        raise FileNotFoundError(
+            f"{PREDICTIONS_FILE.name} not found. Generate and deploy it with "
+            "`python backend/train.py`. To intentionally use heuristic fallback data, "
+            "set ALLOW_ASSEMBLY_FALLBACK=1."
+        )
 
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", CORS_ALLOWED_HEADERS)
         self.end_headers()
 
     def do_GET(self):
         path = urlparse(self.path).path
 
         if path == "/api/health":
-            self._send_json({"status": "ok"})
+            try:
+                rows, source_file, fallback_in_use = self._load_predictions()
+                self._send_json(
+                    {
+                        "status": "ok",
+                        "meta": _build_predictions_meta(rows, source_file, fallback_in_use),
+                    }
+                )
+            except FileNotFoundError as exc:
+                self._send_json({"status": "error", "error": str(exc)}, status=500)
+            except Exception as exc:
+                self._send_json({"status": "error", "error": f"Unexpected server error: {exc}"}, status=500)
             return
 
         if path == "/api/predictions":
             try:
-                rows = self._load_predictions()
-                self._send_json(rows)
+                rows, source_file, fallback_in_use = self._load_predictions()
+                self._send_json(
+                    rows,
+                    extra_headers={
+                        "X-Predictions-Source": source_file.name,
+                        "X-Predictions-Last-Modified-Utc": _iso_mtime_utc(source_file),
+                        "X-Predictions-Fallback": "1" if fallback_in_use else "0",
+                    },
+                )
+            except FileNotFoundError as exc:
+                self._send_json({"error": str(exc)}, status=404)
+            except Exception as exc:
+                self._send_json({"error": f"Unexpected server error: {exc}"}, status=500)
+            return
+
+        if path == "/api/predictions/meta":
+            try:
+                rows, source_file, fallback_in_use = self._load_predictions()
+                self._send_json(_build_predictions_meta(rows, source_file, fallback_in_use))
             except FileNotFoundError as exc:
                 self._send_json({"error": str(exc)}, status=404)
             except Exception as exc:
@@ -122,7 +211,7 @@ class ElectionAPIHandler(BaseHTTPRequestHandler):
         self._send_json(
             {
                 "error": "Not found",
-                "available_routes": ["/api/health", "/api/predictions"],
+                "available_routes": ["/api/health", "/api/predictions", "/api/predictions/meta"],
             },
             status=404,
         )

@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { PartyBadge } from "./components/PartyBadge";
 import { AnimatedKpiGrid } from "./components/AnimatedKpiGrid";
 import {
@@ -10,10 +11,10 @@ import {
   fetchPredictionsMeta,
 } from "./services/api";
 import { PredictionRow, Party, PredictionsMeta } from "./types/prediction";
-import { asPercent, asSeatPercent } from "./utils/format";
+import { asPercentPrecise, asPercentSmart, asSeatPercent } from "./utils/format";
 
 const PARTIES: Party[] = ["LDF", "UDF", "NDA", "OTHERS"];
-const HIGH_CONFIDENCE_THRESHOLD = 0.75;
+const HIGH_MARGIN_THRESHOLD = 0.75;
 let hasAnimatedMiddleStageInSession = false;
 
 function getSeatCounts(rows: PredictionRow[]) {
@@ -84,6 +85,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const middleStageRef = useRef<HTMLElement | null>(null);
   const hasAnimatedMiddleStageRef = useRef(hasAnimatedMiddleStageInSession);
+  const prefersReducedMotion = useReducedMotion();
   const deferredQuery = useDeferredValue(query);
 
   useEffect(() => {
@@ -176,13 +178,13 @@ export function App() {
     }
     return winner;
   }, [total, seatCounts]);
-  const averageConfidence = useMemo(() => {
+  const averageWinMargin = useMemo(() => {
     return filteredRows.reduce((sum, r) => sum + r.confidence, 0) / safeTotal;
   }, [filteredRows, safeTotal]);
-  const highConfidence = useMemo(() => {
+  const highMarginSeats = useMemo(() => {
     return filteredRows.reduce(
       (count, row) =>
-        count + (row.confidence >= HIGH_CONFIDENCE_THRESHOLD ? 1 : 0),
+        count + (row.confidence >= HIGH_MARGIN_THRESHOLD ? 1 : 0),
       0,
     );
   }, [filteredRows]);
@@ -274,7 +276,7 @@ export function App() {
             <AnimatedKpiGrid
               totalConstituencies={total}
               projectedWinner={String(projectedWinner)}
-              averageConfidence={averageConfidence}
+              averageWinMargin={averageWinMargin}
             />
 
             <section className="middle-stage" ref={middleStageRef}>
@@ -390,7 +392,7 @@ export function App() {
                         </div>
                         <div className="right-inline">
                           <PartyBadge party={seat.predicted} />
-                          <span>{asPercent(seat.confidence)}</span>
+                          <span>{asPercentSmart(seat.confidence)} margin</span>
                         </div>
                       </li>
                     ))}
@@ -399,21 +401,37 @@ export function App() {
               </aside>
             </section>
 
-            <section className="panel table-panel explorer-section">
-              <div className="table-head">
-                <h2>Constituency Explorer</h2>
-                <span className="table-meta">
-                  High Confidence Seats: {highConfidence}
-                </span>
-              </div>
-              <div className="table-wrap">
+            <motion.section
+              className="panel table-panel explorer-section"
+              initial={prefersReducedMotion ? false : { opacity: 1, y: 20 }}
+              whileInView={prefersReducedMotion ? undefined : { opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <motion.div
+                className="table-head"
+                initial={prefersReducedMotion ? false : { opacity: 1, y: 10 }}
+                whileInView={prefersReducedMotion ? undefined : { opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.2 }}
+                transition={{ duration: 0.35, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <h2 className="explorer-title">Constituency Explorer</h2>
+                <span className="table-meta">High Margin Seats: {highMarginSeats}</span>
+              </motion.div>
+              <motion.div
+                className="table-wrap"
+                initial={prefersReducedMotion ? false : { opacity: 1, y: 14 }}
+                whileInView={prefersReducedMotion ? undefined : { opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.1 }}
+                transition={{ duration: 0.38, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+              >
                 <table>
                   <thead>
                     <tr>
                       <th>Constituency</th>
                       <th>District</th>
                       <th>Predicted</th>
-                      <th>Confidence</th>
+                      <th>Win Margin</th>
                       <th>LDF</th>
                       <th>UDF</th>
                       <th>NDA</th>
@@ -422,23 +440,23 @@ export function App() {
                   </thead>
                   <tbody>
                     {filteredRows.map((row) => (
-                      <tr key={row.constituency}>
-                        <td>{row.constituency}</td>
-                        <td>{row.district}</td>
-                        <td>
-                          <PartyBadge party={row.predicted} />
-                        </td>
-                        <td>{asPercent(row.confidence)}</td>
-                        <td>{asPercent(row.LDF)}</td>
-                        <td>{asPercent(row.UDF)}</td>
-                        <td>{asPercent(row.NDA)}</td>
-                        <td>{asPercent(row.OTHERS)}</td>
-                      </tr>
+                        <tr key={row.constituency}>
+                          <td>{row.constituency}</td>
+                          <td>{row.district}</td>
+                          <td>
+                            <PartyBadge party={row.predicted} />
+                          </td>
+                          <td>{asPercentSmart(row.confidence)}</td>
+                          <td>{asPercentPrecise(row.LDF)}</td>
+                          <td>{asPercentPrecise(row.UDF)}</td>
+                          <td>{asPercentPrecise(row.NDA)}</td>
+                          <td>{asPercentPrecise(row.OTHERS)}</td>
+                        </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </section>
+              </motion.div>
+            </motion.section>
           </>
         )}
       </main>

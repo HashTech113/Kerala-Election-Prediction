@@ -4,7 +4,7 @@ import { asPercent } from "../utils/format";
 interface AnimatedKpiGridProps {
   totalConstituencies: number;
   projectedWinner: string;
-  averageConfidence: number;
+  averageWinMargin: number;
 }
 
 let hasAnimatedKpiInSession = false;
@@ -12,12 +12,13 @@ let hasAnimatedKpiInSession = false;
 export function AnimatedKpiGrid({
   totalConstituencies,
   projectedWinner,
-  averageConfidence,
+  averageWinMargin,
 }: AnimatedKpiGridProps) {
   const kpiGridRef = useRef<HTMLElement | null>(null);
   const hasAnimatedRef = useRef(hasAnimatedKpiInSession);
-  const [animatedConfidence, setAnimatedConfidence] = useState(
-    hasAnimatedRef.current ? averageConfidence : 0,
+  const previousWinnerRef = useRef(hasAnimatedRef.current ? projectedWinner : "");
+  const [animatedWinMargin, setAnimatedWinMargin] = useState(
+    hasAnimatedRef.current ? averageWinMargin : 0,
   );
   const [animatedTotal, setAnimatedTotal] = useState(
     hasAnimatedRef.current ? totalConstituencies : 0,
@@ -25,13 +26,20 @@ export function AnimatedKpiGrid({
   const [animatedWinner, setAnimatedWinner] = useState(
     hasAnimatedRef.current ? projectedWinner : "",
   );
+  const [winnerRollToken, setWinnerRollToken] = useState(
+    hasAnimatedRef.current ? 1 : 0,
+  );
 
   useEffect(() => {
     if (!hasAnimatedRef.current) return;
-    setAnimatedConfidence(averageConfidence);
+    setAnimatedWinMargin(averageWinMargin);
     setAnimatedTotal(totalConstituencies);
-    setAnimatedWinner(projectedWinner);
-  }, [averageConfidence, totalConstituencies, projectedWinner]);
+    if (previousWinnerRef.current !== projectedWinner) {
+      previousWinnerRef.current = projectedWinner;
+      setAnimatedWinner(projectedWinner);
+      setWinnerRollToken((prev) => prev + 1);
+    }
+  }, [averageWinMargin, totalConstituencies, projectedWinner]);
 
   useEffect(() => {
     const element = kpiGridRef.current;
@@ -39,7 +47,6 @@ export function AnimatedKpiGrid({
 
     let confidenceFrameId = 0;
     let totalFrameId = 0;
-    let winnerIntervalId: number | undefined;
 
     const triggerAnimationOnce = () => {
       if (hasAnimatedRef.current) return;
@@ -48,11 +55,11 @@ export function AnimatedKpiGrid({
 
       const confidenceDurationMs = 1200;
       const confidenceStart = performance.now();
-      const confidenceTarget = averageConfidence;
+      const confidenceTarget = averageWinMargin;
       const confidenceTick = (now: number) => {
         const t = Math.min((now - confidenceStart) / confidenceDurationMs, 1);
         const eased = 1 - Math.pow(1 - t, 3);
-        setAnimatedConfidence(confidenceTarget * eased);
+        setAnimatedWinMargin(confidenceTarget * eased);
         if (t < 1) {
           confidenceFrameId = requestAnimationFrame(confidenceTick);
         }
@@ -72,19 +79,9 @@ export function AnimatedKpiGrid({
       };
       totalFrameId = requestAnimationFrame(totalTick);
 
-      if (projectedWinner.length <= 1) {
-        setAnimatedWinner(projectedWinner);
-        return;
-      }
-      setAnimatedWinner("");
-      let index = 0;
-      winnerIntervalId = window.setInterval(() => {
-        index += 1;
-        setAnimatedWinner(projectedWinner.slice(0, index));
-        if (index >= projectedWinner.length && winnerIntervalId) {
-          window.clearInterval(winnerIntervalId);
-        }
-      }, 140);
+      previousWinnerRef.current = projectedWinner;
+      setAnimatedWinner(projectedWinner);
+      setWinnerRollToken((prev) => prev + 1);
     };
 
     if (typeof IntersectionObserver === "undefined") {
@@ -92,9 +89,6 @@ export function AnimatedKpiGrid({
       return () => {
         cancelAnimationFrame(confidenceFrameId);
         cancelAnimationFrame(totalFrameId);
-        if (winnerIntervalId) {
-          window.clearInterval(winnerIntervalId);
-        }
       };
     }
 
@@ -115,11 +109,8 @@ export function AnimatedKpiGrid({
       observer.disconnect();
       cancelAnimationFrame(confidenceFrameId);
       cancelAnimationFrame(totalFrameId);
-      if (winnerIntervalId) {
-        window.clearInterval(winnerIntervalId);
-      }
     };
-  }, [averageConfidence, totalConstituencies, projectedWinner]);
+  }, [averageWinMargin, totalConstituencies, projectedWinner]);
 
   return (
     <section className="kpi-grid" ref={kpiGridRef}>
@@ -129,11 +120,15 @@ export function AnimatedKpiGrid({
       </article>
       <article className="panel kpi-card">
         <h3>Projected Winner</h3>
-        <strong className="winner-fade-in">{animatedWinner}</strong>
+        <strong className="winner-roll-box" aria-live="polite">
+          <span className="winner-roll-text" key={winnerRollToken}>
+            {animatedWinner || "-"}
+          </span>
+        </strong>
       </article>
       <article className="panel kpi-card">
-        <h3>Average Confidence</h3>
-        <strong>{asPercent(animatedConfidence)}</strong>
+        <h3>Average Win Margin</h3>
+        <strong>{asPercent(animatedWinMargin)}</strong>
       </article>
     </section>
   );

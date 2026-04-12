@@ -110,6 +110,11 @@ export async function fetchPredictionsMeta(signal?: AbortSignal): Promise<Predic
   });
 
   if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error(
+        `Backend API is outdated: ${API_BASE}/api/predictions/meta is missing (404). Redeploy the Railway backend from latest main so it serves /api/predictions/meta.`
+      );
+    }
     throw new Error(
       `Failed to load prediction metadata (${response.status} ${response.statusText}) from ${API_BASE}`
     );

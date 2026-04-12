@@ -1,8 +1,15 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { PartyBadge } from "./components/PartyBadge";
 import { AnimatedKpiGrid } from "./components/AnimatedKpiGrid";
-import { API_BASE, checkHealth, fetchPredictions } from "./services/api";
-import { PredictionRow, Party } from "./types/prediction";
+import {
+  API_BASE,
+  EXPECTED_API_VERSION,
+  EXPECTED_PREDICTIONS_SHA256,
+  fetchHealth,
+  fetchPredictions,
+  fetchPredictionsMeta,
+} from "./services/api";
+import { PredictionRow, Party, PredictionsMeta } from "./types/prediction";
 import { asPercent, asSeatPercent } from "./utils/format";
 
 const PARTIES: Party[] = ["LDF", "UDF", "NDA", "OTHERS"];
@@ -21,10 +28,56 @@ function getSeatCounts(rows: PredictionRow[]) {
   return counts;
 }
 
+function toCountsLine(counts: Record<Party, number>): string {
+  return `LDF ${counts.LDF}, UDF ${counts.UDF}, NDA ${counts.NDA}, OTHERS ${counts.OTHERS}`;
+}
+
+function seatCountsMatch(a: Record<Party, number>, b: Record<Party, number>): boolean {
+  return (
+    a.LDF === b.LDF &&
+    a.UDF === b.UDF &&
+    a.NDA === b.NDA &&
+    a.OTHERS === b.OTHERS
+  );
+}
+
+function validatePredictionMeta(meta: PredictionsMeta): string | null {
+  if (import.meta.env.PROD && !EXPECTED_PREDICTIONS_SHA256) {
+    return "Missing VITE_EXPECTED_PREDICTIONS_SHA256 in production frontend environment.";
+  }
+
+  if (meta.fallback_in_use) {
+    return "Backend is serving fallback data (kerala_assembly_2026.csv), not final predictions_2026.csv.";
+  }
+
+  if (meta.source_file !== "predictions_2026.csv") {
+    return `Unexpected prediction source file: ${meta.source_file}. Expected predictions_2026.csv.`;
+  }
+
+  if (meta.total_constituencies !== 140) {
+    return `Unexpected constituency count: ${meta.total_constituencies}. Expected 140.`;
+  }
+
+  if (EXPECTED_API_VERSION && meta.api_version && meta.api_version !== EXPECTED_API_VERSION) {
+    return `Backend API version mismatch. Expected ${EXPECTED_API_VERSION}, got ${meta.api_version}.`;
+  }
+
+  if (
+    EXPECTED_PREDICTIONS_SHA256 &&
+    (!meta.source_sha256 ||
+      meta.source_sha256.toLowerCase() !== EXPECTED_PREDICTIONS_SHA256.toLowerCase())
+  ) {
+    return "Backend predictions file hash does not match this frontend deployment. Redeploy backend or update frontend env.";
+  }
+
+  return null;
+}
+
 export function App() {
   const [rows, setRows] = useState<PredictionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sourceNote, setSourceNote] = useState("");
 
   const [district, setDistrict] = useState("ALL");
   const [party, setParty] = useState<Party | "ALL">("ALL");
@@ -41,11 +94,34 @@ export function App() {
       setError(null);
 
       try {
-        const healthy = await checkHealth(controller.signal);
-        if (!healthy) throw new Error("Backend health check failed.");
+        const health = await fetchHealth(controller.signal);
+        if (health.status !== "ok") {
+          throw new Error(health.error || "Backend health check failed.");
+        }
+
+        let meta = health.meta;
+        if (!meta) {
+          meta = await fetchPredictionsMeta(controller.signal);
+        }
+
+        const contractError = validatePredictionMeta(meta);
+        if (contractError) throw new Error(contractError);
 
         const predictions = await fetchPredictions(controller.signal);
         if (controller.signal.aborted) return;
+
+        const fetchedSeatCounts = getSeatCounts(predictions);
+        if (!seatCountsMatch(fetchedSeatCounts, meta.seat_counts)) {
+          throw new Error(
+            `Backend metadata and predictions differ. Meta seats: ${toCountsLine(meta.seat_counts)}. Payload seats: ${toCountsLine(fetchedSeatCounts)}.`
+          );
+        }
+
+        const shaShort = meta.source_sha256 ? meta.source_sha256.slice(0, 12) : "n/a";
+        const apiVersion = meta.api_version || "unknown";
+        setSourceNote(
+          `Source ${meta.source_file} | API ${apiVersion} | SHA ${shaShort} | Seats: ${toCountsLine(meta.seat_counts)}`
+        );
         setRows(predictions);
       } catch (err) {
         if (
@@ -192,6 +268,7 @@ export function App() {
               Track every vote across Kerala&apos;s constituencies and see who rises to
               power to form the government
             </p>
+            {sourceNote && <p className="hero-tagline">{sourceNote}</p>}
           </div>
         </header>
 

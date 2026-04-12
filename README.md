@@ -437,6 +437,29 @@ git push origin main
 2. Test `/api/predictions` endpoint directly
 3. Check browser console for parse errors
 
+#### Localhost and deployed prediction totals are different
+1. Check deployed metadata:
+```bash
+curl https://<railway-domain>/api/predictions/meta
+```
+2. Check local metadata:
+```bash
+curl http://127.0.0.1:8001/api/predictions/meta
+```
+Local file hash (Windows PowerShell):
+```powershell
+Get-FileHash backend/predictions_2026.csv -Algorithm SHA256
+```
+3. Compare:
+- `source_file` should be `predictions_2026.csv`
+- `fallback_in_use` should be `false`
+- `source_sha256` should match exactly
+- `seat_counts` should match exactly
+4. If they differ:
+- Redeploy Railway backend from latest commit
+- Update Vercel env `VITE_EXPECTED_PREDICTIONS_SHA256` with the deployed `/api/predictions/meta` hash
+- Redeploy Vercel frontend
+
 ### Environment Variable Issues
 
 #### .env file not found
@@ -538,11 +561,14 @@ In Vercel project settings -> Environment Variables, set:
 
 ```env
 VITE_API_BASE_URL=https://<railway-domain>
+VITE_EXPECTED_API_VERSION=2026-04-12.1
+VITE_EXPECTED_PREDICTIONS_SHA256=<value from /api/predictions/meta source_sha256>
 ```
 
 Note:
 - Frontend also accepts `VITE_API_URL` as an alias.
 - No trailing slash needed.
+- If `VITE_EXPECTED_PREDICTIONS_SHA256` is set, frontend will block stale backend data automatically.
 
 Then redeploy Vercel frontend.
 

@@ -1,4 +1,4 @@
-import { PredictionRow } from "../types/prediction";
+import { HealthResponse, PredictionRow, PredictionsMeta } from "../types/prediction";
 
 /**
  * API Base URL Configuration
@@ -14,6 +14,12 @@ const API_BASE =
   import.meta.env.VITE_API_BASE_URL?.trim() ||
   import.meta.env.VITE_API_URL?.trim() ||
   "http://127.0.0.1:8001";
+
+const EXPECTED_PREDICTIONS_SHA256 =
+  import.meta.env.VITE_EXPECTED_PREDICTIONS_SHA256?.trim().toLowerCase() || "";
+
+const EXPECTED_API_VERSION =
+  import.meta.env.VITE_EXPECTED_API_VERSION?.trim() || "";
 
 function withCacheBuster(path: string): string {
   const separator = path.includes("?") ? "&" : "?";
@@ -46,12 +52,23 @@ function validateApiConfig(): void {
       "[API Config] WARNING: Using localhost API_BASE in production. Set VITE_API_BASE_URL to your Railway backend URL."
     );
   }
+
+  if (import.meta.env.PROD && !EXPECTED_PREDICTIONS_SHA256) {
+    console.warn(
+      "[API Config] WARNING: VITE_EXPECTED_PREDICTIONS_SHA256 is not set. Deployment may show stale backend data without detection."
+    );
+  }
 }
 
 // Validate on module load
 validateApiConfig();
 
 export async function checkHealth(signal?: AbortSignal): Promise<boolean> {
+  const body = await fetchHealth(signal);
+  return body.status === "ok";
+}
+
+export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {
   try {
     const response = await fetch(withCacheBuster(`${API_BASE}/api/health`), {
       signal,
@@ -61,14 +78,38 @@ export async function checkHealth(signal?: AbortSignal): Promise<boolean> {
       console.warn(
         `[API] Health check failed: ${response.status} ${response.statusText}`
       );
-      return false;
+      return {
+        status: "error",
+        error: `Health check failed: ${response.status} ${response.statusText}`,
+      };
     }
-    const body = await response.json();
-    return body?.status === "ok";
+    const body = (await response.json()) as HealthResponse;
+    if (!body?.status) {
+      return { status: "error", error: "Invalid health response payload." };
+    }
+    return body;
   } catch (error) {
     console.error("[API] Health check error:", error);
-    return false;
+    return {
+      status: "error",
+      error: error instanceof Error ? error.message : "Health check request failed.",
+    };
   }
+}
+
+export async function fetchPredictionsMeta(signal?: AbortSignal): Promise<PredictionsMeta> {
+  const response = await fetch(withCacheBuster(`${API_BASE}/api/predictions/meta`), {
+    signal,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load prediction metadata (${response.status} ${response.statusText}) from ${API_BASE}`
+    );
+  }
+
+  return (await response.json()) as PredictionsMeta;
 }
 
 export async function fetchPredictions(signal?: AbortSignal): Promise<PredictionRow[]> {
@@ -104,3 +145,4 @@ export async function fetchPredictions(signal?: AbortSignal): Promise<Prediction
 }
 
 export { API_BASE };
+export { EXPECTED_API_VERSION, EXPECTED_PREDICTIONS_SHA256 };

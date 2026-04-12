@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -12,6 +13,7 @@ ASSEMBLY_FALLBACK_FILE = ROOT / "data_files" / "kerala_assembly_2026.csv"
 PARTIES = ("LDF", "UDF", "NDA", "OTHERS")
 NO_STORE_CACHE_HEADER = "no-store, no-cache, must-revalidate, max-age=0"
 CORS_ALLOWED_HEADERS = "Content-Type, Cache-Control, Pragma"
+API_VERSION = "2026-04-12.1"
 
 
 def _env_flag(name, default=False):
@@ -97,6 +99,17 @@ def _iso_mtime_utc(path: Path):
         return None
 
 
+def _file_sha256(path: Path):
+    try:
+        digest = hashlib.sha256()
+        with path.open("rb") as fp:
+            for chunk in iter(lambda: fp.read(65536), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except FileNotFoundError:
+        return None
+
+
 def _seat_counts(rows):
     counts = {party: 0 for party in PARTIES}
     for row in rows:
@@ -112,9 +125,11 @@ def _build_predictions_meta(rows, source_file: Path, fallback_in_use: bool):
     if rows:
         projected_winner = max(PARTIES, key=lambda party: counts[party])
     return {
+        "api_version": API_VERSION,
         "source_file": source_file.name,
         "source_path": str(source_file),
         "source_last_modified_utc": _iso_mtime_utc(source_file),
+        "source_sha256": _file_sha256(source_file),
         "fallback_in_use": fallback_in_use,
         "allow_assembly_fallback": ALLOW_ASSEMBLY_FALLBACK,
         "total_constituencies": len(rows),
@@ -172,6 +187,7 @@ class ElectionAPIHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     {
                         "status": "ok",
+                        "api_version": API_VERSION,
                         "meta": _build_predictions_meta(rows, source_file, fallback_in_use),
                     }
                 )
@@ -187,8 +203,10 @@ class ElectionAPIHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     rows,
                     extra_headers={
+                        "X-API-Version": API_VERSION,
                         "X-Predictions-Source": source_file.name,
                         "X-Predictions-Last-Modified-Utc": _iso_mtime_utc(source_file),
+                        "X-Predictions-SHA256": _file_sha256(source_file),
                         "X-Predictions-Fallback": "1" if fallback_in_use else "0",
                     },
                 )

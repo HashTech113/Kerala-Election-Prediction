@@ -127,7 +127,7 @@ export function AnimatedKpiGrid({
         </strong>
       </article>
       <article className="panel kpi-card">
-        <h3>Average Win Margin</h3>
+        <h3>Average Winning Score</h3>
         <strong>{asPercent(animatedWinMargin)}</strong>
       </article>
     </section>

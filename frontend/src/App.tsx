@@ -392,7 +392,7 @@ export function App() {
                         </div>
                         <div className="right-inline">
                           <PartyBadge party={seat.predicted} />
-                          <span>{asPercentSmart(seat.confidence)} margin</span>
+                          <span>{asPercentSmart(seat.confidence)} Score</span>
                         </div>
                       </li>
                     ))}
@@ -416,7 +416,7 @@ export function App() {
                 transition={{ duration: 0.35, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
               >
                 <h2 className="explorer-title">Constituency Explorer</h2>
-                <span className="table-meta">High Margin Seats: {highMarginSeats}</span>
+                <span className="table-meta">High Score Seats: {highMarginSeats}</span>
               </motion.div>
               <motion.div
                 className="table-wrap"
@@ -431,7 +431,7 @@ export function App() {
                       <th>Constituency</th>
                       <th>District</th>
                       <th>Predicted</th>
-                      <th>Win Margin</th>
+                      <th>Winning Score</th>
                       <th>LDF</th>
                       <th>UDF</th>
                       <th>NDA</th>

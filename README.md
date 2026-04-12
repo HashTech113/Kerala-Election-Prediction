@@ -546,6 +546,10 @@ Note:
 
 Then redeploy Vercel frontend.
 
+Vercel build config note:
+- Do not hardcode `npm --prefix frontend ...` in Dashboard commands.
+- Keep project root as either repository root or `frontend/`; `vercel.json` now auto-detects both.
+
 ## Clear End-to-End Run Process
 
 1. Install dependencies

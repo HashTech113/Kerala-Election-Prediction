@@ -78,7 +78,6 @@ export function App() {
   const [rows, setRows] = useState<PredictionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sourceNote, setSourceNote] = useState("");
 
   const [district, setDistrict] = useState("ALL");
   const [party, setParty] = useState<Party | "ALL">("ALL");
@@ -118,11 +117,6 @@ export function App() {
           );
         }
 
-        const shaShort = meta.source_sha256 ? meta.source_sha256.slice(0, 12) : "n/a";
-        const apiVersion = meta.api_version || "unknown";
-        setSourceNote(
-          `Source ${meta.source_file} | API ${apiVersion} | SHA ${shaShort} | Seats: ${toCountsLine(meta.seat_counts)}`
-        );
         setRows(predictions);
       } catch (err) {
         if (
@@ -269,7 +263,6 @@ export function App() {
               Track every vote across Kerala&apos;s constituencies and see who rises to
               power to form the government
             </p>
-            {sourceNote && <p className="hero-tagline">{sourceNote}</p>}
           </div>
         </header>
 

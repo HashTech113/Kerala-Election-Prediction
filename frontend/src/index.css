@@ -8,6 +8,10 @@
     "Segoe UI",
     system-ui,
     sans-serif;
+  --mobile-visible-rows: 6;
+  --district-mobile-row-height: 3.35rem;
+  --competitive-mobile-row-height: 3.95rem;
+  --side-panel-mobile-head-height: 2.85rem;
   --explorer-visible-rows: 10;
   --explorer-row-height: 2.6rem;
   --explorer-head-height: 2.7rem;
@@ -802,7 +806,42 @@ tbody tr:hover {
   }
 
   .left-stack .panel,
-  .right-stack .panel,
+  .right-stack .panel {
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .left-stack .panel::-webkit-scrollbar,
+  .right-stack .panel::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  .left-stack .panel {
+    max-height: calc(
+      var(--side-panel-mobile-head-height) +
+        (var(--mobile-visible-rows) * var(--district-mobile-row-height))
+    );
+  }
+
+  .right-stack .panel {
+    max-height: calc(
+      var(--side-panel-mobile-head-height) +
+        (var(--mobile-visible-rows) * var(--competitive-mobile-row-height))
+    );
+  }
+
+  .district-item {
+    min-height: var(--district-mobile-row-height);
+  }
+
+  .tight-list li {
+    min-height: var(--competitive-mobile-row-height);
+  }
+
   .center-card {
     overflow: visible;
   }

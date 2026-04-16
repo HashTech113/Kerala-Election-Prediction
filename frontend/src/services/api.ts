@@ -148,17 +148,33 @@ async function fetchWithApiFallback(
   path: string,
   init: RequestInit
 ): Promise<Response> {
+  const primaryUrl = withApiBase(path, API_BASE);
+  const fallbackUrl = API_BASE_FALLBACK ? withApiBase(path, API_BASE_FALLBACK) : "";
+
   try {
-    return await fetch(withApiBase(path, API_BASE), init);
+    const response = await fetch(primaryUrl, init);
+    if (
+      fallbackUrl &&
+      (response.status === 404 ||
+        response.status === 502 ||
+        response.status === 503 ||
+        response.status === 504)
+    ) {
+      console.warn(
+        `[API] Primary endpoint returned ${response.status} (${API_BASE}). Retrying via fallback ${API_BASE_FALLBACK}.`
+      );
+      return fetch(fallbackUrl, init);
+    }
+    return response;
   } catch (error) {
-    if (!(error instanceof TypeError) || !API_BASE_FALLBACK) {
+    if (!(error instanceof TypeError) || !fallbackUrl) {
       throw error;
     }
 
     console.warn(
       `[API] Primary endpoint unreachable (${API_BASE}). Retrying via fallback ${API_BASE_FALLBACK}.`
     );
-    return fetch(withApiBase(path, API_BASE_FALLBACK), init);
+    return fetch(fallbackUrl, init);
   }
 }
 

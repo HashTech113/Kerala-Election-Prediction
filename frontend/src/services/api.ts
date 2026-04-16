@@ -48,14 +48,32 @@ function inferApiBaseFromWindow(): string {
   return import.meta.env.PROD ? origin : "";
 }
 
+function isVercelHostname(hostname: string): boolean {
+  return hostname === "vercel.app" || hostname.endsWith(".vercel.app");
+}
+
 const EXPLICIT_API_BASE =
   normalizeApiBase(import.meta.env.VITE_API_BASE_URL) ||
   normalizeApiBase(import.meta.env.VITE_API_URL);
 
 const INFERRED_API_BASE = normalizeApiBase(inferApiBaseFromWindow());
 
+const WINDOW_HOSTNAME = typeof window !== "undefined" ? window.location.hostname : "";
+const SHOULD_USE_SAME_ORIGIN_PROXY =
+  import.meta.env.PROD &&
+  isVercelHostname(WINDOW_HOSTNAME) &&
+  String(import.meta.env.VITE_FORCE_DIRECT_API || "").trim() !== "1";
+
 const API_BASE =
-  EXPLICIT_API_BASE || INFERRED_API_BASE || (import.meta.env.DEV ? LOCAL_API_BASE : "");
+  (SHOULD_USE_SAME_ORIGIN_PROXY
+    ? INFERRED_API_BASE || EXPLICIT_API_BASE
+    : EXPLICIT_API_BASE || INFERRED_API_BASE) ||
+  (import.meta.env.DEV ? LOCAL_API_BASE : "");
+
+const API_BASE_FALLBACK =
+  SHOULD_USE_SAME_ORIGIN_PROXY && EXPLICIT_API_BASE && EXPLICIT_API_BASE !== API_BASE
+    ? EXPLICIT_API_BASE
+    : "";
 
 const EXPECTED_PREDICTIONS_SHA256 =
   import.meta.env.VITE_EXPECTED_PREDICTIONS_SHA256?.trim().toLowerCase() || "";
@@ -73,6 +91,10 @@ if (import.meta.env.DEV) {
   console.log(
     "[API Config] API_BASE_URL:",
     API_BASE,
+    "| SHOULD_USE_SAME_ORIGIN_PROXY:",
+    SHOULD_USE_SAME_ORIGIN_PROXY,
+    "| API_BASE_FALLBACK:",
+    API_BASE_FALLBACK || "(none)",
     "| EXPLICIT_API_BASE:",
     EXPLICIT_API_BASE || "(none)",
     "| INFERRED_API_BASE:",
@@ -102,6 +124,12 @@ function validateApiConfig(): void {
     );
   }
 
+  if (SHOULD_USE_SAME_ORIGIN_PROXY) {
+    console.info(
+      "[API Config] INFO: Using same-origin API proxy on Vercel host to improve cross-network reachability."
+    );
+  }
+
   if (import.meta.env.PROD && !EXPECTED_PREDICTIONS_SHA256) {
     console.warn(
       "[API Config] WARNING: VITE_EXPECTED_PREDICTIONS_SHA256 is not set. Deployment may show stale backend data without detection."
@@ -112,6 +140,28 @@ function validateApiConfig(): void {
 // Validate on module load
 validateApiConfig();
 
+function withApiBase(path: string, base: string): string {
+  return withCacheBuster(`${base}${path}`);
+}
+
+async function fetchWithApiFallback(
+  path: string,
+  init: RequestInit
+): Promise<Response> {
+  try {
+    return await fetch(withApiBase(path, API_BASE), init);
+  } catch (error) {
+    if (!(error instanceof TypeError) || !API_BASE_FALLBACK) {
+      throw error;
+    }
+
+    console.warn(
+      `[API] Primary endpoint unreachable (${API_BASE}). Retrying via fallback ${API_BASE_FALLBACK}.`
+    );
+    return fetch(withApiBase(path, API_BASE_FALLBACK), init);
+  }
+}
+
 export async function checkHealth(signal?: AbortSignal): Promise<boolean> {
   const body = await fetchHealth(signal);
   return body.status === "ok";
@@ -119,7 +169,7 @@ export async function checkHealth(signal?: AbortSignal): Promise<boolean> {
 
 export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {
   try {
-    const response = await fetch(withCacheBuster(`${API_BASE}/api/health`), {
+    const response = await fetchWithApiFallback("/api/health", {
       signal,
       cache: "no-store",
     });
@@ -147,7 +197,7 @@ export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse>
 }
 
 export async function fetchPredictionsMeta(signal?: AbortSignal): Promise<PredictionsMeta> {
-  const response = await fetch(withCacheBuster(`${API_BASE}/api/predictions/meta`), {
+  const response = await fetchWithApiFallback("/api/predictions/meta", {
     signal,
     cache: "no-store",
   });
@@ -168,7 +218,7 @@ export async function fetchPredictionsMeta(signal?: AbortSignal): Promise<Predic
 
 export async function fetchPredictions(signal?: AbortSignal): Promise<PredictionRow[]> {
   try {
-    const response = await fetch(withCacheBuster(`${API_BASE}/api/predictions`), {
+    const response = await fetchWithApiFallback("/api/predictions", {
       signal,
       cache: "no-store",
     });

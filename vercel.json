@@ -3,5 +3,11 @@
   "version": 2,
   "installCommand": "if [ -f frontend/package.json ]; then npm --prefix frontend install; else npm install; fi",
   "buildCommand": "if [ -f frontend/package.json ]; then node frontend/scripts/sync_contract.mjs && npm --prefix frontend run build && rm -rf dist && mkdir -p dist && cp -r frontend/dist/. dist/; else node scripts/sync_contract.mjs && npm run build; fi",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://owlytics-election-prediction-production.up.railway.app/api/:path*"
+    }
+  ]
 }

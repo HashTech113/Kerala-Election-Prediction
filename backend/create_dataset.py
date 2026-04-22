@@ -1,32 +1,24 @@
 """
-Create Kerala Assembly Election 2026 Dataset
-==============================================
-Kerala Legislative Assembly Election - 9 April 2026
-Results: 4 May 2026 | 140 Constituencies | Majority: 71
+[DEPRECATED] Create Kerala Assembly Election 2026 Dataset
+==========================================================
+This module is the legacy bootstrapper that originally generated
+backend/data_files/kerala_assembly_2026.csv from hardcoded historical
+dictionaries and synthetic 2026 projections.
 
-Data Sources:
-- 2021 Kerala Assembly Election Results (all 140 constituencies)
-- 2024 Lok Sabha Results (20 constituencies mapped to assembly segments)
-- 2025 Kerala Local Body Election Results (UDF surge, NDA growth)
-- 2020 Local Body Election Results (baseline)
-- Census 2011 + Updates (demographics)
-- Social Media Monitoring (Twitter/X, Facebook, Instagram, LinkedIn) - 2024-2026
-- Opinion Polls: Manorama-CVoter, Mathrubhumi, Political Vibe (March 2026)
+It is no longer part of the training pipeline. The current pipeline reads
+all data directly from the 22 CSVs in backend/data_files/ via
+backend/data_loader.py — see train.py for the new flow.
 
-Political Context:
-- LDF incumbent since 2016 (two consecutive terms, historic in Kerala)
-- UDF swept 2024 LS (18/20 seats), strong anti-incumbency wave
-- NDA won Thrissur LS 2024 (first ever Kerala LS win), targeting 20%+ vote share
-- Key issues: Anti-incumbency, Sabarimala gold theft, healthcare crisis,
-  youth unemployment, AI campaign warfare, FCRA controversy
+This file is kept for archival reference only:
+- The hardcoded dicts below (CONSTITUENCIES, DEMOGRAPHICS, LOCAL_BODY_2025,
+  LOK_SABHA_2024, REGIONAL_ISSUES, etc.) document how the persisted CSV was
+  originally produced.
+- The synthetic projection engine (create_constituency_dataset()) is no
+  longer invoked by train.py.
 
-Opinion Poll Consensus (March 2026):
-- Manorama-CVoter: UDF 69-81, LDF 57-69, NDA 1-5
-- Mathrubhumi: LDF ~66, UDF ~62 (too close)
-- Political Vibe: LDF 59-78, UDF 49-69, NDA 8-17
-- Poll Mantra: UDF 38.2%, LDF 33.7%, NDA 20.4% vote share
-
-Registered Voters: 26,953,644 (Male: 13,126,048, Female: 13,827,319, TG: 277)
+Do not import from this module in production code. If you need to regenerate
+the CSV with new data, prefer extending data_loader.py to consume new CSV
+sources rather than reviving this script.
 """
 
 import os

@@ -13,8 +13,13 @@ import {
 import { PredictionRow, Party, PredictionsMeta } from "./types/prediction";
 import { asPercentPrecise, asPercentSmart, asSeatPercent } from "./utils/format";
 
-const PARTIES: Party[] = ["LDF", "UDF", "NDA", "OTHERS"];
-const HIGH_MARGIN_THRESHOLD = 0.75;
+type DisplayParty = Exclude<Party, "OTHERS">;
+const ALL_PARTIES: Party[] = ["LDF", "UDF", "NDA", "OTHERS"];
+const DISPLAY_PARTIES: DisplayParty[] = ["LDF", "UDF", "NDA"];
+// Backend "confidence" is now the top-1 predicted-party probability
+// (range 0.25-1.0 for 4 classes). 0.60 cleanly separates confident calls
+// from competitive ones; the 0.75 margin used previously was unreachable.
+const HIGH_MARGIN_THRESHOLD = 0.6;
 let hasAnimatedMiddleStageInSession = false;
 
 function getSeatCounts(rows: PredictionRow[]) {
@@ -81,7 +86,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
 
   const [district, setDistrict] = useState("ALL");
-  const [party, setParty] = useState<Party | "ALL">("ALL");
+  const [party, setParty] = useState<DisplayParty | "ALL">("ALL");
   const [query, setQuery] = useState("");
   const middleStageRef = useRef<HTMLElement | null>(null);
   const hasAnimatedMiddleStageRef = useRef(hasAnimatedMiddleStageInSession);
@@ -164,14 +169,14 @@ export function App() {
 
   const seatCounts = useMemo(() => getSeatCounts(filteredRows), [filteredRows]);
   const sortedParties = useMemo(() => {
-    return [...PARTIES].sort((a, b) => seatCounts[b] - seatCounts[a]);
+    return [...DISPLAY_PARTIES].sort((a, b) => seatCounts[b] - seatCounts[a]);
   }, [seatCounts]);
   const total = filteredRows.length;
   const safeTotal = total || 1;
   const projectedWinner = useMemo<Party | "-">(() => {
     if (total === 0) return "-";
-    let winner: Party = PARTIES[0];
-    for (const partyName of PARTIES) {
+    let winner: Party = ALL_PARTIES[0];
+    for (const partyName of ALL_PARTIES) {
       if (seatCounts[partyName] > seatCounts[winner]) {
         winner = partyName;
       }
@@ -205,7 +210,7 @@ export function App() {
     }
 
     return [...map.entries()]
-      .map(([name, counts]) => ({ name, ...counts, total: counts.LDF + counts.UDF + counts.NDA + counts.OTHERS }))
+      .map(([name, counts]) => ({ name, ...counts, total: counts.LDF + counts.UDF + counts.NDA }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [filteredRows]);
 
@@ -291,7 +296,7 @@ export function App() {
                           <span>{d.total} seats</span>
                         </div>
                         <div className="district-bars">
-                          {PARTIES.map((p) => (
+                          {DISPLAY_PARTIES.map((p) => (
                             <div
                               key={p}
                               className={`district-segment segment-${p}`}
@@ -332,10 +337,10 @@ export function App() {
                         <select
                           id="party"
                           value={party}
-                          onChange={(e) => setParty(e.target.value as Party | "ALL")}
+                          onChange={(e) => setParty(e.target.value as DisplayParty | "ALL")}
                         >
                           <option value="ALL">All Parties</option>
-                          {PARTIES.map((p) => (
+                          {DISPLAY_PARTIES.map((p) => (
                             <option key={p} value={p}>
                               {p}
                             </option>
@@ -356,7 +361,7 @@ export function App() {
                     </div>
                   </section>
 
-                  <section className="inner-block">
+                  <section className="inner-block seat-distribution-block">
                     <h2>Seat Distribution</h2>
                     <div className="bar-list">
                       {sortedParties.map((p) => (
@@ -435,7 +440,6 @@ export function App() {
                       <th>LDF</th>
                       <th>UDF</th>
                       <th>NDA</th>
-                      <th>OTHERS</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -450,7 +454,6 @@ export function App() {
                           <td>{asPercentPrecise(row.LDF)}</td>
                           <td>{asPercentPrecise(row.UDF)}</td>
                           <td>{asPercentPrecise(row.NDA)}</td>
-                          <td>{asPercentPrecise(row.OTHERS)}</td>
                         </tr>
                     ))}
                   </tbody>

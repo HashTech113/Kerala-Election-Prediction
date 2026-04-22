@@ -2,22 +2,24 @@
 Kerala Assembly Election 2026 - Training & Prediction Pipeline
 ==============================================================
 
-Flow:  data_files/kerala_assembly_2026.csv  (from create_dataset.py)
-         -> feature extraction (49 dims)
+Flow:  backend/data_files/*.csv  (22 source files merged by data_loader.py)
+         -> feature extraction
          -> RepeatedKFold (5x3 = 15 folds)
          -> MLP ensemble with dual heads (classification + vote-share regression)
          -> ensemble_predict across all 15 models
          -> predictions_2026.csv
 
 Usage:
-    python create_dataset.py   # Step 1: build training CSV from dataset/*.xlsx
-    python train.py            # Step 2: train model + generate predictions
+    python train.py            # train model + generate predictions
+
+The data layer is fully CSV-driven via data_loader.load_training_dataframe();
+no hardcoded historical data and no synthetic projection logic remain in
+the training pipeline.
 """
 
 import os
 import time
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -28,6 +30,10 @@ from sklearn.preprocessing import StandardScaler
 from dataclasses import dataclass, field
 from typing import List
 import warnings
+
+import pandas as pd
+
+from data_loader import load_training_dataframe
 
 warnings.filterwarnings("ignore")
 
@@ -78,6 +84,10 @@ class Config:
 # Data Loading & Feature Engineering
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# Categorical vocabularies. These are fixed by the Election Commission of
+# India and never change between cycles, so listing them here is acceptable
+# (we are not encoding sample data, only the legal value space). The actual
+# values per row come from the CSV-driven loader.
 REGIONS = ["North", "Central", "South", "Malabar", "Travancore"]
 DISTRICTS = [
     "Thiruvananthapuram", "Kollam", "Pathanamthitta", "Alappuzha",
@@ -86,123 +96,134 @@ DISTRICTS = [
 ]
 
 
+# Numeric feature columns sourced directly from the loader. Order is fixed
+# so the model and the saved scalers stay in sync across runs.
+NUMERIC_FEATURES = [
+    # Per-AC historical
+    "vote_share_2021", "margin_pct_2021",
+    "fin_crisis_impact", "wildlife_conflict_impact", "turnout_pct",
+    # District demographics (kerala_demographics.csv)
+    "population_density", "literacy_rate", "urban_pct",
+    "hindu_pct", "muslim_pct", "christian_pct",
+    "sc_st_pct", "youth_pct", "women_pct",
+    # Reservation flag
+    "is_reserved",
+    # Incumbent / runner-up state-level momentum
+    # (state-level alliance trends × per-AC 2021 winner — varies per row)
+    "incumbent_ls_swing_2024_2019", "incumbent_ls_swing_2019_2014",
+    "incumbent_as_swing_2021_2016",
+    "runnerup_ls_swing_2024_2019", "runnerup_as_swing_2021_2016",
+    # Sentiment + alliance structure (joined via 2021 winner / runner-up)
+    "incumbent_sentiment", "challenger_sentiment",
+    "incumbent_concentration", "challenger_concentration",
+    "incumbent_breadth", "challenger_breadth",
+    # State-level voter aggregates (broadcast constants — bias-absorbed
+    # by the model but kept so every CSV in data_files/ is exercised)
+    "state_turnout_pct", "state_first_time_voter_pct",
+    "state_candidates_per_seat",
+]
+
+# Some columns are stored on a 0-100 scale in the CSV; bring them to 0-1
+# before scaling so the StandardScaler sees a consistent magnitude range.
+PERCENT_SCALE_COLS = {
+    "literacy_rate", "urban_pct",
+    "hindu_pct", "muslim_pct", "christian_pct",
+    "sc_st_pct", "youth_pct", "women_pct",
+}
+
+# Population density divided by this constant for the same reason.
+POP_DENSITY_DIVISOR = 1600.0
+
+
 class ElectionDataset:
     """
-    Loads the constituency CSV and builds a numerical feature matrix.
+    Builds the model-ready feature matrix from the CSV-driven DataFrame.
 
-    Feature groups (49 total):
-      [0:4]   winner_2016 one-hot (LDF/UDF/NDA/OTHERS)
-      [4:8]   winner_2021 one-hot
-      [8:12]  runner_up_2021 one-hot
-      [12:14] vote_share_2021, margin_pct_2021
-      [14:17] ls2024_ldf/udf/nda_pct
-      [17:20] lb2025_ldf/udf/nda
-      [20:22] fin_crisis_impact, wildlife_conflict_impact
-      [22]    turnout_pct
-      [23:29] demographics (density, literacy, urban, hindu, muslim, christian)
-      [29]    is_reserved
-      [30:35] region_5way one-hot
-      [35:49] district one-hot (14)
+    The DataFrame itself is produced by data_loader.load_training_dataframe(),
+    which merges all 22 CSVs in backend/data_files/. This class only handles
+    one-hot encoding of categoricals + numeric scaling for non-standardized
+    columns + sanity validation.
     """
 
-    def __init__(self, csv_path: str):
+    def __init__(self):
         self.config = Config()
         self.party_to_idx = {p: i for i, p in enumerate(self.config.parties)}
 
-        print("Loading data...")
-        self.df = pd.read_csv(csv_path)
+        print("Loading data from backend/data_files/ ...")
+        self.df = load_training_dataframe()
         self.features, self.labels, self.vote_shares, self.meta = self._build()
 
         n = len(self.features)
         dist = {p: int((self.labels == i).sum()) for i, p in enumerate(self.config.parties)}
         print(f"  Samples: {n} | Features: {self.features.shape[1]} | Classes: {dist}")
 
+    def _row_features(self, row: pd.Series) -> list[float]:
+        f: list[float] = []
+
+        # ── Categorical one-hots (winners + runner-up + region + district) ─
+        for party in self.config.parties:
+            f.append(1.0 if row["winner_2016"] == party else 0.0)
+        for party in self.config.parties:
+            f.append(1.0 if row["winner_2021"] == party else 0.0)
+        for party in self.config.parties:
+            f.append(1.0 if row["runner_up_2021"] == party else 0.0)
+        for r in REGIONS:
+            f.append(1.0 if row["region_5way"] == r else 0.0)
+        for d in DISTRICTS:
+            f.append(1.0 if row["district"] == d else 0.0)
+
+        # ── Numeric features in fixed order ────────────────────────────────
+        for col in NUMERIC_FEATURES:
+            v = float(row[col])
+            if col == "population_density":
+                v /= POP_DENSITY_DIVISOR
+            elif col in PERCENT_SCALE_COLS:
+                v /= 100.0
+            f.append(v)
+
+        return f
+
     def _build(self):
         features, labels, vote_shares, meta = [], [], [], []
 
         for _, row in self.df.iterrows():
-            f = []
+            features.append(self._row_features(row))
 
-            # Historical winner encoding (2016 + 2021)
-            for party in self.config.parties:
-                f.append(1.0 if row.get("winner_2016", "") == party else 0.0)
-            for party in self.config.parties:
-                f.append(1.0 if row["winner_2021"] == party else 0.0)
-
-            # Runner-up 2021
-            for party in self.config.parties:
-                f.append(1.0 if row.get("runner_up_2021", "") == party else 0.0)
-
-            # Vote share & margin
-            f.extend([row["vote_share_2021"], row["margin_pct_2021"]])
-
-            # Lok Sabha 2024
-            f.extend([
-                row.get("ls2024_ldf_pct", 0.35),
-                row.get("ls2024_udf_pct", 0.40),
-                row.get("ls2024_nda_pct", 0.15),
-            ])
-
-            # Local body 2025
-            f.extend([
-                row.get("lb2025_ldf", 0.40),
-                row.get("lb2025_udf", 0.35),
-                row.get("lb2025_nda", 0.10),
-            ])
-
-            # Regional issues
-            f.extend([
-                row.get("fin_crisis_impact", 0.5),
-                row.get("wildlife_conflict_impact", 0.0),
-            ])
-
-            # Turnout
-            f.append(float(row.get("turnout_pct", 0.77)))
-
-            # Demographics (normalized)
-            f.extend([
-                row.get("population_density", 800) / 1600.0,
-                row.get("literacy_rate", 93) / 100.0,
-                row.get("urban_pct", 30) / 100.0,
-                row.get("hindu_pct", 55) / 100.0,
-                row.get("muslim_pct", 25) / 100.0,
-                row.get("christian_pct", 18) / 100.0,
-            ])
-
-            # Reserved seat
-            f.append(float(row.get("is_reserved", 0)))
-
-            # Region 5-way one-hot
-            region = row.get("region_5way", "")
-            for r in REGIONS:
-                f.append(1.0 if region == r else 0.0)
-
-            # District one-hot
-            for d in DISTRICTS:
-                f.append(1.0 if row["district"] == d else 0.0)
-
-            features.append(f)
-
-            # Label: projected winner
+            # Label — fail loudly on unknown values; silent fallback to
+            # OTHERS would corrupt class weights and the trained classifier.
             label_name = row["proj_2026_winner"]
-            labels.append(self.party_to_idx.get(label_name, 3))
+            if label_name not in self.party_to_idx:
+                raise ValueError(
+                    f"Unknown proj_2026_winner '{label_name}' for constituency "
+                    f"'{row['constituency']}'. Expected one of {list(self.party_to_idx)}."
+                )
+            labels.append(self.party_to_idx[label_name])
 
-            # Regression target: projected vote shares
             vote_shares.append([
-                row.get("proj_2026_ldf_pct", 0.35),
-                row.get("proj_2026_udf_pct", 0.40),
-                row.get("proj_2026_nda_pct", 0.15),
-                row.get("proj_2026_others_pct", 0.02),
+                row["proj_2026_ldf_pct"],
+                row["proj_2026_udf_pct"],
+                row["proj_2026_nda_pct"],
+                row["proj_2026_others_pct"],
             ])
 
             meta.append({"constituency": row["constituency"], "district": row["district"]})
 
-        return (
-            np.array(features, dtype=np.float32),
-            np.array(labels, dtype=np.int64),
-            np.array(vote_shares, dtype=np.float32),
-            meta,
-        )
+        features_arr = np.array(features, dtype=np.float32)
+        labels_arr = np.array(labels, dtype=np.int64)
+        vote_shares_arr = np.array(vote_shares, dtype=np.float32)
+
+        if np.isnan(features_arr).any():
+            raise ValueError("NaN detected in feature matrix after CSV merge.")
+        if np.isnan(vote_shares_arr).any():
+            raise ValueError("NaN detected in vote-share targets after CSV merge.")
+
+        # Renormalize vote-share targets so they sum to exactly 1.0 — the
+        # loader already enforces a 5%-drift bound; this is the final fix-up
+        # for soft cross-entropy.
+        sums = vote_shares_arr.sum(axis=1, keepdims=True)
+        vote_shares_arr = vote_shares_arr / sums
+
+        return features_arr, labels_arr, vote_shares_arr, meta
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -256,12 +277,14 @@ class ElectionModel(nn.Module):
             nn.Dropout(config.dropout),
             nn.Linear(h // 2, config.num_classes),
         )
+        # Outputs raw logits; softmax is applied in forward() so the same
+        # tensor can serve both training (log-softmax + soft cross-entropy)
+        # and inference (probability distribution that sums to 1).
         self.regressor = nn.Sequential(
             nn.Linear(h, h // 2),
             nn.GELU(),
             nn.Dropout(config.dropout),
             nn.Linear(h // 2, config.num_classes),
-            nn.Softmax(dim=-1),
         )
 
         self.apply(self._init_weights)
@@ -278,10 +301,12 @@ class ElectionModel(nn.Module):
             x = block(x)
         x = self.norm(x)
         logits = self.classifier(x)
+        vs_logits = self.regressor(x)
         return {
             "logits": logits,
             "probs": F.softmax(logits, dim=-1),
-            "vote_shares": self.regressor(x),
+            "vs_logits": vs_logits,
+            "vote_shares": F.softmax(vs_logits, dim=-1),
         }
 
 
@@ -340,7 +365,14 @@ def train_fold(fold_idx, train_idx, val_idx, data: ElectionDataset, config: Conf
     cls_criterion = nn.CrossEntropyLoss(
         weight=compute_class_weights(y_tr, config.max_class_weight).to(dev)
     )
-    reg_criterion = nn.MSELoss()
+
+    # Soft cross-entropy between predicted log-probs and target distribution.
+    # Targets sum to 1 (validated at load time), so this is the proper loss
+    # for the vote-share head — MSE on softmax outputs has scale issues.
+    def reg_criterion(vs_logits, vs_target):
+        log_probs = F.log_softmax(vs_logits, dim=-1)
+        return -(vs_target * log_probs).sum(dim=-1).mean()
+
     optimizer = optim.AdamW(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
 
     # Cosine schedule with warmup
@@ -356,6 +388,11 @@ def train_fold(fold_idx, train_idx, val_idx, data: ElectionDataset, config: Conf
     best_acc, wait = 0.0, 0
     ckpt_path = os.path.join(_BACKEND_DIR, f"checkpoints/model_fold_{fold_idx}.pt")
 
+    # Combined validation loss (lower is better) — selects on both heads.
+    best_val_loss = float("inf")
+    best_acc = 0.0
+    wait = 0
+
     for epoch in range(config.epochs):
         model.train()
         for xb, yb, vsb in train_dl:
@@ -364,21 +401,26 @@ def train_fold(fold_idx, train_idx, val_idx, data: ElectionDataset, config: Conf
             out = model(xb)
             loss = (
                 config.cls_weight * cls_criterion(out["logits"], yb)
-                + config.reg_weight * reg_criterion(out["vote_shares"], vsb)
+                + config.reg_weight * reg_criterion(out["vs_logits"], vsb)
             )
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
         scheduler.step()
 
-        # Validation
+        # Validation: track classification + regression loss together
         model.eval()
         with torch.no_grad():
-            for xb, yb, _ in val_dl:
-                preds = model(xb.to(dev))["logits"].argmax(-1)
-                acc = (preds == yb.to(dev)).float().mean().item()
+            for xb, yb, vsb in val_dl:
+                xb, yb, vsb = xb.to(dev), yb.to(dev), vsb.to(dev)
+                out = model(xb)
+                v_cls = cls_criterion(out["logits"], yb).item()
+                v_reg = reg_criterion(out["vs_logits"], vsb).item()
+                val_loss = config.cls_weight * v_cls + config.reg_weight * v_reg
+                acc = (out["logits"].argmax(-1) == yb).float().mean().item()
 
-        if acc > best_acc:
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
             best_acc = acc
             wait = 0
             safe_save({"model": model.state_dict(), "scaler": scaler}, ckpt_path)
@@ -389,7 +431,7 @@ def train_fold(fold_idx, train_idx, val_idx, data: ElectionDataset, config: Conf
             break
 
     best_epoch = epoch + 1 - wait
-    print(f"  Fold {fold_idx + 1:2d}: val_acc={best_acc:.4f}  (best @ epoch {best_epoch})")
+    print(f"  Fold {fold_idx + 1:2d}: val_loss={best_val_loss:.4f}  acc={best_acc:.4f}  (best @ epoch {best_epoch})")
     return best_acc
 
 
@@ -398,12 +440,19 @@ def train_fold(fold_idx, train_idx, val_idx, data: ElectionDataset, config: Conf
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
-def ensemble_predict(data: ElectionDataset, config: Config) -> pd.DataFrame:
-    """Average predictions across all 15 fold models."""
+def ensemble_predict(
+    data: ElectionDataset, config: Config, global_scaler: StandardScaler
+) -> pd.DataFrame:
+    """Average predictions across all fold models using a single global scaler."""
     print("\nGenerating ensemble predictions...")
     dev = config.device
     n_models = config.n_splits * config.n_repeats
     n_samples = len(data.labels)
+
+    # One scaler for all models — fold scalers are training-only and would
+    # otherwise feed each model a slightly different feature distribution.
+    X_scaled = global_scaler.transform(data.features).astype(np.float32)
+    X_tensor = torch.from_numpy(X_scaled).to(dev)
 
     all_probs = np.zeros((n_samples, config.num_classes))
     all_vs = np.zeros((n_samples, config.num_classes))
@@ -413,30 +462,38 @@ def ensemble_predict(data: ElectionDataset, config: Config) -> pd.DataFrame:
             os.path.join(_BACKEND_DIR, f"checkpoints/model_fold_{i}.pt"),
             weights_only=False,
         )
-        X_scaled = ckpt["scaler"].transform(data.features).astype(np.float32)
         model = ElectionModel(X_scaled.shape[1], config).to(dev)
         model.load_state_dict(ckpt["model"])
         model.eval()
         with torch.no_grad():
-            out = model(torch.from_numpy(X_scaled).to(dev))
+            out = model(X_tensor)
             all_probs += out["probs"].cpu().numpy()
             all_vs += out["vote_shares"].cpu().numpy()
 
     all_probs /= n_models
     all_vs /= n_models
 
+    # Sanity checks on the averaged outputs
+    assert not np.isnan(all_probs).any(), "NaN in ensemble class probabilities"
+    assert not np.isnan(all_vs).any(), "NaN in ensemble vote shares"
+    assert np.allclose(all_probs.sum(axis=1), 1.0, atol=1e-4), \
+        "Class probabilities do not sum to 1"
+    assert np.allclose(all_vs.sum(axis=1), 1.0, atol=1e-4), \
+        "Vote shares do not sum to 1"
+
     results = []
     for i in range(n_samples):
         probs = all_probs[i]
         vs = all_vs[i]
-        sorted_p = np.sort(probs)
-        pred_idx = np.argmax(probs)
+        pred_idx = int(np.argmax(probs))
 
         results.append({
             "constituency": data.meta[i]["constituency"],
             "district": data.meta[i]["district"],
             "predicted": config.parties[pred_idx],
-            "confidence": float(sorted_p[-1] - sorted_p[-2]),
+            # Calibrated confidence = probability assigned to the predicted party.
+            # Range [0.25, 1.0] for 4 classes; values >= 0.60 are "confident".
+            "confidence": float(probs[pred_idx]),
             "LDF": float(probs[0]),
             "UDF": float(probs[1]),
             "NDA": float(probs[2]),
@@ -476,11 +533,11 @@ def print_summary(results: pd.DataFrame, config: Config):
     status = "MAJORITY" if winner_n >= majority else "HUNG ASSEMBLY"
     print(f"\n  Projected winner: {winner} ({winner_n} seats) - {status}")
 
-    # Confidence stats
+    # Confidence stats (top-1 predicted-class probability)
     avg_conf = results["confidence"].mean()
-    high_conf = (results["confidence"] > 0.4).sum()
-    print(f"\n  Avg confidence margin: {avg_conf:.1%}")
-    print(f"  High-confidence seats (>40% margin): {high_conf}/{total}")
+    high_conf = (results["confidence"] >= 0.60).sum()
+    print(f"\n  Avg winning-party probability: {avg_conf:.1%}")
+    print(f"  High-confidence seats (>=60% probability): {high_conf}/{total}")
 
     # District breakdown
     print("\n  DISTRICT-WISE:")
@@ -513,19 +570,13 @@ def main():
     config = Config()
     os.makedirs(os.path.join(_BACKEND_DIR, "checkpoints"), exist_ok=True)
 
-    csv_path = os.path.join(_BACKEND_DIR, "data_files", "kerala_assembly_2026.csv")
-    if not os.path.exists(csv_path):
-        print("ERROR: Training data not found.")
-        print("  Run this first:  python create_dataset.py")
-        return
-
     print("=" * 60)
     print("  KERALA ELECTION 2026 - MODEL TRAINING")
     print(f"  Device: {config.device}")
     print("=" * 60)
 
-    # ── Step 1: Load data ──────────────────────────────────────
-    data = ElectionDataset(csv_path)
+    # ── Step 1: Load data (CSV-driven via data_loader) ─────────
+    data = ElectionDataset()
 
     # ── Step 2: Cross-validation training ──────────────────────
     print(f"\nTraining {config.n_splits}x{config.n_repeats} = "
@@ -543,7 +594,11 @@ def main():
     print(f"\n  CV Accuracy: {mean_acc:.4f} +/- {std_acc:.4f}")
 
     # ── Step 3: Ensemble prediction ────────────────────────────
-    results = ensemble_predict(data, config)
+    # Fit one scaler on the full dataset for inference. Per-fold scalers
+    # remain inside their checkpoints but are no longer used at predict
+    # time — every model now sees consistent feature scaling.
+    global_scaler = StandardScaler().fit(data.features)
+    results = ensemble_predict(data, config, global_scaler)
 
     # ── Step 4: Save output ────────────────────────────────────
     out_path = os.path.join(_BACKEND_DIR, "predictions_2026.csv")

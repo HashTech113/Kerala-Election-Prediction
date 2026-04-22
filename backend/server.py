@@ -70,12 +70,13 @@ def _load_rows_from_assembly_fallback():
                 "NDA": _to_float(row.get("proj_2026_nda_pct", 0)),
                 "OTHERS": _to_float(row.get("proj_2026_others_pct", 0)),
             }
-            sorted_shares = sorted(shares.values(), reverse=True)
-            confidence = sorted_shares[0] - sorted_shares[1] if len(sorted_shares) > 1 else 0.0
-
             predicted = row.get("proj_2026_winner", "")
             if predicted not in shares:
                 predicted = max(shares, key=shares.get)
+            # Confidence == probability assigned to the winning party.
+            # Matches the calibrated top-1 metric used by the trained model
+            # so the frontend threshold is comparable across both sources.
+            confidence = shares.get(predicted, 0.0)
 
             rows.append(
                 {

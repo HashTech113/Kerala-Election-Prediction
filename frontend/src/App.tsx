@@ -264,11 +264,12 @@ export function App() {
                 height={56}
                 decoding="async"
               />
-              <h1 className="brand-title">Intelligent Predictions</h1>
+              <h1 className="brand-title">Election Predictions</h1>
             </div>
             <p className="hero-tagline">
-              Our intelligent AI tracked every vote across Kerala&apos;s constituencies,
-              uncovered key trends, and predicted who will form the next government.
+              Our <strong>Intelligent AI</strong> tracked every vote across{" "}
+              <strong>Kerala&apos;s</strong> constituencies, uncovered key trends, and
+              predicted who will form the next government.
             </p>
           </div>
         </header>

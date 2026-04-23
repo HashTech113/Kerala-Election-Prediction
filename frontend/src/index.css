@@ -151,9 +151,13 @@ body {
 .hero-tagline {
   margin: 0.78rem auto 0;
   width: min(760px, 96%);
-  color: var(--muted);
+  color: #2f3a54;
   font-size: clamp(0.95rem, 1vw + 0.45rem, 1.1rem);
   line-height: 1.45;
+}
+
+.hero-tagline strong {
+  color: #1b2568;
 }
 
 .error-banner {

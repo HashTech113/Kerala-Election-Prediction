@@ -257,18 +257,18 @@ export function App() {
           <div className="hero-inner">
             <div className="brand-line" aria-label="QVotelytics">
               <img
-                src="/assets/owlytics"
+                src="/assets/owlytics.png"
                 alt="Q logo"
                 className="q-logo"
                 width={56}
                 height={56}
                 decoding="async"
               />
-              <h1 className="brand-title">Election Prediction</h1>
+              <h1 className="brand-title">Intelligent Predictions</h1>
             </div>
             <p className="hero-tagline">
-              Track every vote across Kerala&apos;s constituencies and see who rises to
-              power to form the government
+              Our intelligent AI tracked every vote across Kerala&apos;s constituencies,
+              uncovered key trends, and predicted who will form the next government.
             </p>
           </div>
         </header>

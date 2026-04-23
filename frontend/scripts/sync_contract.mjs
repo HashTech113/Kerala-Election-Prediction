@@ -53,11 +53,24 @@ function main() {
   const detectedHash = sha256OfFile(predictionsPath);
   const detectedApiVersion = readApiVersion(serverPath);
 
-  const expectedHash =
-    process.env.VITE_EXPECTED_PREDICTIONS_SHA256?.trim().toLowerCase() ||
-    detectedHash;
-  const expectedApiVersion =
-    process.env.VITE_EXPECTED_API_VERSION?.trim() || detectedApiVersion;
+  const providedHash = process.env.VITE_EXPECTED_PREDICTIONS_SHA256?.trim().toLowerCase() || "";
+  if (providedHash && providedHash !== detectedHash) {
+    throw new Error(
+      "VITE_EXPECTED_PREDICTIONS_SHA256 does not match backend/predictions_2026.csv. " +
+        `provided=${providedHash}, detected=${detectedHash}.`
+    );
+  }
+
+  const providedApiVersion = process.env.VITE_EXPECTED_API_VERSION?.trim() || "";
+  if (providedApiVersion && detectedApiVersion && providedApiVersion !== detectedApiVersion) {
+    throw new Error(
+      "VITE_EXPECTED_API_VERSION does not match backend/server.py API_VERSION. " +
+        `provided=${providedApiVersion}, detected=${detectedApiVersion}.`
+    );
+  }
+
+  const expectedHash = detectedHash;
+  const expectedApiVersion = detectedApiVersion;
 
   const outputPath = path.join(frontendDir, ".env.production.local");
   const outputLines = [

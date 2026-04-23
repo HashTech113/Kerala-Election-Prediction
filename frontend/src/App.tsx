@@ -47,25 +47,45 @@ function seatCountsMatch(a: Record<Party, number>, b: Record<Party, number>): bo
   );
 }
 
-function validatePredictionMeta(meta: PredictionsMeta): string | null {
+type MetaValidationResult = {
+  error: string | null;
+  warning: string | null;
+};
+
+function validatePredictionMeta(meta: PredictionsMeta): MetaValidationResult {
   if (import.meta.env.PROD && !EXPECTED_PREDICTIONS_SHA256) {
-    return "Missing VITE_EXPECTED_PREDICTIONS_SHA256 in production frontend environment.";
+    return {
+      error: "Missing VITE_EXPECTED_PREDICTIONS_SHA256 in production frontend environment.",
+      warning: null,
+    };
   }
 
   if (meta.fallback_in_use) {
-    return "Backend is serving fallback data (kerala_assembly_2026.csv), not final predictions_2026.csv.";
+    return {
+      error: "Backend is serving fallback data (kerala_assembly_2026.csv), not final predictions_2026.csv.",
+      warning: null,
+    };
   }
 
   if (meta.source_file !== "predictions_2026.csv") {
-    return `Unexpected prediction source file: ${meta.source_file}. Expected predictions_2026.csv.`;
+    return {
+      error: `Unexpected prediction source file: ${meta.source_file}. Expected predictions_2026.csv.`,
+      warning: null,
+    };
   }
 
   if (meta.total_constituencies !== 140) {
-    return `Unexpected constituency count: ${meta.total_constituencies}. Expected 140.`;
+    return {
+      error: `Unexpected constituency count: ${meta.total_constituencies}. Expected 140.`,
+      warning: null,
+    };
   }
 
   if (EXPECTED_API_VERSION && meta.api_version && meta.api_version !== EXPECTED_API_VERSION) {
-    return `Backend API version mismatch. Expected ${EXPECTED_API_VERSION}, got ${meta.api_version}.`;
+    return {
+      error: `Backend API version mismatch. Expected ${EXPECTED_API_VERSION}, got ${meta.api_version}.`,
+      warning: null,
+    };
   }
 
   if (
@@ -74,16 +94,22 @@ function validatePredictionMeta(meta: PredictionsMeta): string | null {
       meta.source_sha256.toLowerCase() !== EXPECTED_PREDICTIONS_SHA256.toLowerCase())
   ) {
     const actualHash = meta.source_sha256 ? meta.source_sha256.toLowerCase() : "missing";
-    return `Backend predictions hash mismatch. Expected ${EXPECTED_PREDICTIONS_SHA256}, got ${actualHash}. Redeploy backend and frontend from the same commit.`;
+    return {
+      error: null,
+      warning:
+        `Backend predictions hash mismatch. Expected ${EXPECTED_PREDICTIONS_SHA256}, got ${actualHash}. ` +
+        "Using live backend data anyway; redeploy backend and frontend from the same commit.",
+    };
   }
 
-  return null;
+  return { error: null, warning: null };
 }
 
 export function App() {
   const [rows, setRows] = useState<PredictionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   const [district, setDistrict] = useState("ALL");
   const [party, setParty] = useState<DisplayParty | "ALL">("ALL");
@@ -99,6 +125,7 @@ export function App() {
     async function load() {
       setLoading(true);
       setError(null);
+      setWarning(null);
 
       try {
         const health = await fetchHealth(controller.signal);
@@ -111,8 +138,13 @@ export function App() {
           meta = await fetchPredictionsMeta(controller.signal);
         }
 
-        const contractError = validatePredictionMeta(meta);
-        if (contractError) throw new Error(contractError);
+        const validation = validatePredictionMeta(meta);
+        if (validation.warning) {
+          setWarning(validation.warning);
+        }
+        if (validation.error) {
+          throw new Error(validation.error);
+        }
 
         const predictions = await fetchPredictions(controller.signal);
         if (controller.signal.aborted) return;
@@ -275,6 +307,7 @@ export function App() {
         </header>
 
         {error && <div className="error-banner">{error}</div>}
+        {!error && warning && <div className="warning-banner">{warning}</div>}
         {loading && <div className="panel loading">Loading predictions...</div>}
 
         {!loading && !error && (

@@ -13,9 +13,8 @@ import {
 import { PredictionRow, Party, PredictionsMeta } from "./types/prediction";
 import { asPercentPrecise, asPercentSmart, asSeatPercent } from "./utils/format";
 
-type DisplayParty = Exclude<Party, "OTHERS">;
 const ALL_PARTIES: Party[] = ["LDF", "UDF", "NDA", "OTHERS"];
-const DISPLAY_PARTIES: DisplayParty[] = ["LDF", "UDF", "NDA"];
+const DISPLAY_PARTIES: Party[] = ["LDF", "UDF", "NDA", "OTHERS"];
 // Backend "confidence" is now the top-1 predicted-party probability
 // (range 0.25-1.0 for 4 classes). 0.60 cleanly separates confident calls
 // from competitive ones; the 0.75 margin used previously was unreachable.
@@ -112,7 +111,7 @@ export function App() {
   const [warning, setWarning] = useState<string | null>(null);
 
   const [district, setDistrict] = useState("ALL");
-  const [party, setParty] = useState<DisplayParty | "ALL">("ALL");
+  const [party, setParty] = useState<Party | "ALL">("ALL");
   const [query, setQuery] = useState("");
   const middleStageRef = useRef<HTMLElement | null>(null);
   const hasAnimatedMiddleStageRef = useRef(hasAnimatedMiddleStageInSession);
@@ -242,7 +241,7 @@ export function App() {
     }
 
     return [...map.entries()]
-      .map(([name, counts]) => ({ name, ...counts, total: counts.LDF + counts.UDF + counts.NDA }))
+      .map(([name, counts]) => ({ name, ...counts, total: counts.LDF + counts.UDF + counts.NDA + counts.OTHERS }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [filteredRows]);
 
@@ -371,7 +370,7 @@ export function App() {
                         <select
                           id="party"
                           value={party}
-                          onChange={(e) => setParty(e.target.value as DisplayParty | "ALL")}
+                          onChange={(e) => setParty(e.target.value as Party | "ALL")}
                         >
                           <option value="ALL">All Parties</option>
                           {DISPLAY_PARTIES.map((p) => (
@@ -474,6 +473,7 @@ export function App() {
                       <th>LDF</th>
                       <th>UDF</th>
                       <th>NDA</th>
+                      <th>OTHERS</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -488,6 +488,7 @@ export function App() {
                           <td>{asPercentPrecise(row.LDF)}</td>
                           <td>{asPercentPrecise(row.UDF)}</td>
                           <td>{asPercentPrecise(row.NDA)}</td>
+                          <td>{asPercentPrecise(row.OTHERS)}</td>
                         </tr>
                     ))}
                   </tbody>

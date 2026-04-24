@@ -1,5 +1,5 @@
-party,current_position,official_turnout_pct_latest,women_turnout_pct_latest,male_turnout_pct_latest,confidence_pre_result
-LDF,Competitive,78.27,80.86,75.01,Medium
-UDF,Slight edge / virtual tie,78.27,80.86,75.01,Medium
-NDA,Third front,78.27,80.86,75.01,Low-Medium
-OTHERS,Minor,78.27,80.86,75.01,Low
+party,current_position,official_turnout_pct_latest,women_turnout_pct_latest,male_turnout_pct_latest,result_status,counting_date,confidence
+LDF,Very competitive / near tie,78.27,80.86,75.01,Counting pending,04-05-2026,Medium
+UDF,Slight edge / near tie,78.27,80.86,75.01,Counting pending,04-05-2026,Medium
+NDA,Third front (limited impact),78.27,80.86,75.01,Counting pending,04-05-2026,Low-Medium
+OTHERS,Minor impact,78.27,80.86,75.01,Counting pending,04-05-2026,Low

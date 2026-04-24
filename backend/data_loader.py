@@ -59,9 +59,13 @@ CONFIDENCE_MAP = {
     "Medium-High": 0.75,
     "High": 0.90,
     "Slight edge / virtual tie": 0.55,
+    "Slight edge / near tie": 0.55,
     "Competitive": 0.50,
+    "Very competitive / near tie": 0.50,
     "Third front": 0.30,
+    "Third front (limited impact)": 0.30,
     "Minor": 0.15,
+    "Minor impact": 0.15,
 }
 
 
@@ -118,10 +122,14 @@ def _state_alliance_trends() -> dict[str, float]:
 def _alliance_sentiment() -> dict[str, float]:
     df = _read("kerala_sentiment_analysis_2026.csv")
     df["party"] = _normalize_party(df["party"])
-    df["score"] = df["confidence_pre_result"].map(CONFIDENCE_MAP)
+    # Column was renamed from `confidence_pre_result` to `confidence` when
+    # the sentiment CSV picked up post-polling metadata (result_status,
+    # counting_date). Accept either name so older snapshots still load.
+    conf_col = "confidence" if "confidence" in df.columns else "confidence_pre_result"
+    df["score"] = df[conf_col].map(CONFIDENCE_MAP)
     if df["score"].isna().any():
-        unknown = df.loc[df["score"].isna(), "confidence_pre_result"].unique()
-        raise ValueError(f"Unknown confidence_pre_result label(s): {list(unknown)}")
+        unknown = df.loc[df["score"].isna(), conf_col].unique()
+        raise ValueError(f"Unknown {conf_col} label(s): {list(unknown)}")
     return df.set_index("party")["score"].to_dict()
 
 

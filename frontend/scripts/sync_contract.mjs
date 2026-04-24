@@ -15,12 +15,12 @@ function resolvePaths() {
   ];
 
   const backendDir = backendDirCandidates.find((candidate) =>
-    existsSync(path.join(candidate, "server.py"))
+    existsSync(path.join(candidate, "services.py"))
   );
 
   if (!backendDir) {
     throw new Error(
-      "Could not locate backend directory containing server.py. " +
+      "Could not locate backend directory containing services.py. " +
         "Ensure this repository contains both frontend/ and backend/."
     );
   }
@@ -28,9 +28,9 @@ function resolvePaths() {
   return { frontendDir, backendDir };
 }
 
-function readApiVersion(serverPath) {
-  const serverSource = readFileSync(serverPath, "utf8");
-  const match = serverSource.match(/API_VERSION\s*=\s*["']([^"']+)["']/);
+function readApiVersion(servicesPath) {
+  const source = readFileSync(servicesPath, "utf8");
+  const match = source.match(/API_VERSION\s*=\s*["']([^"']+)["']/);
   return match ? match[1].trim() : "";
 }
 
@@ -42,7 +42,7 @@ function sha256OfFile(filePath) {
 function main() {
   const { frontendDir, backendDir } = resolvePaths();
   const predictionsPath = path.join(backendDir, "predictions_2026.csv");
-  const serverPath = path.join(backendDir, "server.py");
+  const servicesPath = path.join(backendDir, "services.py");
 
   if (!existsSync(predictionsPath)) {
     throw new Error(
@@ -51,7 +51,7 @@ function main() {
   }
 
   const detectedHash = sha256OfFile(predictionsPath);
-  const detectedApiVersion = readApiVersion(serverPath);
+  const detectedApiVersion = readApiVersion(servicesPath);
 
   const providedHash = process.env.VITE_EXPECTED_PREDICTIONS_SHA256?.trim().toLowerCase() || "";
   if (providedHash && providedHash !== detectedHash) {
@@ -64,7 +64,7 @@ function main() {
   const providedApiVersion = process.env.VITE_EXPECTED_API_VERSION?.trim() || "";
   if (providedApiVersion && detectedApiVersion && providedApiVersion !== detectedApiVersion) {
     throw new Error(
-      "VITE_EXPECTED_API_VERSION does not match backend/server.py API_VERSION. " +
+      "VITE_EXPECTED_API_VERSION does not match backend/services.py API_VERSION. " +
         `provided=${providedApiVersion}, detected=${detectedApiVersion}.`
     );
   }

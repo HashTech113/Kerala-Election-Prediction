@@ -32,7 +32,11 @@ def main():
     backend_env.setdefault("HOST", backend_host)
     backend_env.setdefault("PORT", backend_port)
 
-    backend_cmd = [sys.executable, os.path.join(ROOT, "backend", "server.py")]
+    backend_cmd = [
+        sys.executable, "-m", "uvicorn", "main:app",
+        "--app-dir", os.path.join(ROOT, "backend"),
+        "--host", backend_host, "--port", str(backend_port),
+    ]
     frontend_dir = os.path.join(ROOT, "frontend")
     frontend_cmd = ["npm", "run", "dev", "--", "--host", frontend_host, "--port", frontend_port]
 

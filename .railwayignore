@@ -1,0 +1,16 @@
+# Railway should only deploy the Python backend.
+# The root package.json exists for local dev orchestration (`npm run dev`)
+# — it has no role on Railway.
+
+node_modules/
+frontend/
+*.log
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+backend/checkpoints/
+.vercel/
+.railway/

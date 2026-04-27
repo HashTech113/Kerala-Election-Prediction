@@ -29,8 +29,6 @@ const PREDICTION_LEVEL_OPTIONS: PredictionLevel[] = [
   "recent_swing",
   "live_intelligence_score",
 ];
-const SCENARIO_WARNING_TEXT =
-  "Prediction only. Official results will be available after counting on 4 May 2026.";
 // Backend "confidence" is now the top-1 predicted-party probability
 // (range 0.25-1.0 for 4 classes). 0.60 cleanly separates confident calls
 // from competitive ones; the 0.75 margin used previously was unreachable.
@@ -340,11 +338,6 @@ export function App() {
 
         {error && <div className="error-banner">{error}</div>}
         {!error && warning && <div className="warning-banner">{warning}</div>}
-        {!error && (
-          <div className="prediction-warning" role="status">
-            {SCENARIO_WARNING_TEXT}
-          </div>
-        )}
         {loading && <div className="panel loading">Loading predictions...</div>}
 
         {!loading && !error && (

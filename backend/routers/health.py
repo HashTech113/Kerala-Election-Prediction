@@ -9,7 +9,7 @@ from services import (
     API_VERSION,
     NO_STORE_HEADERS,
     build_predictions_meta,
-    load_predictions,
+    load_active_predictions,
 )
 
 router = APIRouter(tags=["health"])
@@ -23,7 +23,7 @@ router = APIRouter(tags=["health"])
 )
 def health() -> JSONResponse:
     try:
-        rows, source_file, fallback_in_use = load_predictions()
+        rows, source_file, fallback_in_use, _ = load_active_predictions()
         payload = {
             "status": "ok",
             "api_version": API_VERSION,

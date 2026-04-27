@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { AnalysisHero } from "./components/AnalysisHero";
 import { PartyBadge } from "./components/PartyBadge";
-import { ProjectionSummaryGrid } from "./components/ProjectionSummaryGrid";
 import {
   API_BASE,
   EXPECTED_API_VERSION,
@@ -14,8 +14,6 @@ import {
   PredictionRow,
   Party,
   PredictionsMeta,
-  PROJECTION_SUMMARIES,
-  ProjectionTab,
 } from "./types/prediction";
 import { asPercentPrecise, asPercentSmart, asSeatPercent } from "./utils/format";
 
@@ -23,12 +21,6 @@ const ALLOWED_SOURCE_FILES = new Set([
   "predictions_2026.csv",
   "kerala_prediction_scenarios_2026.csv",
 ]);
-const tabs: Array<{ key: ProjectionTab; label: string }> = [
-  { key: "historical_projection", label: "HISTORICAL PROJECTION" },
-  { key: "long_term_trend", label: "LONG-TERM TREND" },
-  { key: "recent_swing", label: "RECENT SWING" },
-  { key: "live_intelligence_score", label: "LIVE INTELLIGENCE SCORE" },
-];
 // Backend "confidence" is now the top-1 predicted-party probability
 // (range 0.25-1.0 for 4 classes). 0.60 cleanly separates confident calls
 // from competitive ones; the 0.75 margin used previously was unreachable.
@@ -133,7 +125,6 @@ export function App() {
   const [district, setDistrict] = useState("ALL");
   const [party, setParty] = useState<Party | "ALL">("ALL");
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<ProjectionTab>(tabs[0].key);
   const middleStageRef = useRef<HTMLElement | null>(null);
   const hasAnimatedMiddleStageRef = useRef(hasAnimatedMiddleStageInSession);
   const prefersReducedMotion = useReducedMotion();
@@ -300,26 +291,7 @@ export function App() {
       <div className="bg-blur bg-blur-b" />
 
       <main className="container">
-        <header className="hero">
-          <div className="hero-inner">
-            <div className="brand-line" aria-label="QVotelytics">
-              <img
-                src="/assets/owlytics.png"
-                alt="Q logo"
-                className="q-logo"
-                width={56}
-                height={56}
-                decoding="async"
-              />
-              <h1 className="brand-title">Election Predictions</h1>
-            </div>
-            <p className="hero-tagline">
-              Our <strong>Intelligent AI</strong> tracked every vote across{" "}
-              <strong>Kerala&apos;s</strong> constituencies, uncovered key trends, and
-              predicted who will form the next government.
-            </p>
-          </div>
-        </header>
+        <AnalysisHero />
 
         {error && <div className="error-banner">{error}</div>}
         {!error && warning && <div className="warning-banner">{warning}</div>}
@@ -327,22 +299,6 @@ export function App() {
 
         {!loading && !error && (
           <>
-            <nav className="pred-tabs" aria-label="Prediction tabs">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  className={`pred-tab ${activeTab === tab.key ? "is-active" : ""}`}
-                  onClick={() => setActiveTab(tab.key)}
-                  aria-pressed={activeTab === tab.key}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-
-            <ProjectionSummaryGrid summary={PROJECTION_SUMMARIES[activeTab]} />
-
             <section className="middle-stage" ref={middleStageRef}>
               <aside className="left-stack">
                 <article className="panel">

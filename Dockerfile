@@ -23,7 +23,10 @@ RUN pip install \
 # excluded via .dockerignore.
 COPY backend/ /app/backend/
 
-EXPOSE 8000
+# No EXPOSE: Railway auto-detects the listening port from $PORT at runtime.
+# A static EXPOSE here would mislead Railway's edge router into using the
+# wrong target port and produce "service unavailable" 503s on healthcheck.
+# Locally, `docker run -p 8000:8000` still works because of the default below.
 
 # Railway injects $PORT at runtime. Default to 8000 for local `docker run`.
 CMD ["sh", "-c", "uvicorn main:app --app-dir backend --host 0.0.0.0 --port ${PORT:-8000}"]

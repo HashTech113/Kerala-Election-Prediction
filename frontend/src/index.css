@@ -42,6 +42,15 @@
   --udf: #2563eb;
   --nda: #f59e0b;
   --others: #94a3b8;
+
+  /* Hero / tab tokens (Election Prediction section spec) */
+  --font-primary: "Poppins", "Inter", "Segoe UI", system-ui, sans-serif;
+  --color-navy: #0b1b6f;
+  --color-text: #1a1a2e;
+  --color-tab-inactive: #2a2a3e;
+  --gradient-active: linear-gradient(90deg, #6366f1 0%, #8b5cf6 60%, #a855f7 100%);
+  --shadow-pill: 0 4px 20px rgba(0, 0, 0, 0.06);
+  --shadow-active: 0 6px 16px rgba(99, 102, 241, 0.35);
 }
 
 * {
@@ -118,7 +127,7 @@ body {
 
 .hero,
 .ep-hero {
-  padding: 3.25rem 1.5rem 0;
+  padding: 2.25rem 1.5rem 0;
   background: transparent;
   border: 0;
   box-shadow: none;
@@ -134,16 +143,16 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 0.7rem;
   position: relative;
 }
 
 .q-logo,
 .ep-logo {
-  width: 56px;
-  height: 56px;
+  width: 42px;
+  height: 42px;
   object-fit: contain;
-  margin-top: 4px;
+  margin-top: 3px;
   animation: logoZoom 3.2s ease-in-out 1 both;
   will-change: transform;
 }
@@ -151,28 +160,29 @@ body {
 .brand-title,
 .ep-brand h1 {
   margin: 0;
-  font-size: clamp(2.25rem, 4.5vw, 3.5rem);
+  font-family: var(--font-primary);
+  font-size: clamp(1.6rem, 2.8vw + 0.4rem, 2.5rem);
   line-height: 1.1;
-  color: #0a1a5c;
-  letter-spacing: -0.5px;
+  color: var(--color-navy);
+  letter-spacing: -0.4px;
   font-weight: 700;
-  font-family: "Poppins", "Inter", system-ui, sans-serif;
 }
 
 .hero-tagline,
 .ep-hero p {
-  margin: 0.85rem auto 0;
-  max-width: 780px;
-  width: min(780px, 96%);
-  color: #1f1f2e;
-  font-size: clamp(0.95rem, 0.5vw + 0.7rem, 1.125rem);
+  margin: 0.7rem auto 0;
+  max-width: 660px;
+  width: min(660px, 94%);
+  font-family: var(--font-primary);
+  color: var(--color-text);
+  font-size: clamp(0.84rem, 0.32vw + 0.7rem, 0.98rem);
   line-height: 1.55;
   font-weight: 400;
 }
 
 .hero-tagline strong,
 .ep-hero p span {
-  color: inherit;
+  color: var(--color-navy);
   font-weight: 700;
 }
 
@@ -199,26 +209,27 @@ body {
 .pred-tabs,
 .ep-tabs {
   display: inline-flex;
-  gap: 8px;
-  padding: 10px 12px;
-  margin: 1.1rem auto 2rem;
+  gap: 6px;
+  padding: 7px 9px;
+  margin: 0.9rem auto 1.5rem;
   justify-self: center;
   width: fit-content;
   max-width: 100%;
   border-radius: 60px;
   border: 0;
   background: #ffffff;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-pill);
 }
 
 .pred-tab,
 .ep-tab {
-  padding: 14px 32px;
+  padding: 10px 22px;
   border: 0;
   border-radius: 40px;
   background: transparent;
-  color: #1f1f2e;
-  font-size: 13px;
+  font-family: var(--font-primary);
+  color: var(--color-tab-inactive);
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -237,15 +248,15 @@ body {
 
 .pred-tab.is-active,
 .ep-tab.active {
-  background: linear-gradient(90deg, #5b6bff 0%, #8b5cf6 50%, #a855f7 100%);
+  background: var(--gradient-active);
   color: #ffffff;
-  box-shadow: 0 6px 16px rgba(91, 107, 255, 0.35);
+  box-shadow: var(--shadow-active);
 }
 
 .pred-tab.is-active:hover,
 .ep-tab.active:hover {
   color: #ffffff;
-  background: linear-gradient(90deg, #4c5cf2 0%, #7c4ef0 50%, #9947f0 100%);
+  background: linear-gradient(90deg, #5358ee 0%, #7c4ef0 60%, #9947f0 100%);
 }
 
 @media (max-width: 720px) {
@@ -271,7 +282,7 @@ body {
     flex: 0 0 auto;
     padding: 12px 22px;
     font-size: 12px;
-    letter-spacing: 1px;
+    letter-spacing: 1.2px;
     scroll-snap-align: start;
   }
 }
@@ -396,8 +407,23 @@ body {
 }
 
 .kpi-data-reference {
-  font-size: 1.55rem;
+  font-size: 1rem;
   letter-spacing: 0.01em;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.projection-interpretation {
+  margin: 0.65rem auto 0;
+  max-width: 760px;
+  padding: 0 0.6rem;
+  text-align: center;
+  font-family: var(--font-primary, "Poppins", sans-serif);
+  font-size: 0.86rem;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--muted, #5d6790);
+  line-height: 1.5;
 }
 
 .winner-roll-box {

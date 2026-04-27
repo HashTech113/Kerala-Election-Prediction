@@ -101,8 +101,11 @@ export type ProjectionSummary = {
   label: string;
   totalConstituencies: number;
   dataReference: string;
-  projectedWinner: Party;
-  averageWinningScore: number; // fraction in [0, 1]
+  /** "LDF" / "UDF" / "NDA" / "OTHERS" / "N/A" / longer label like "UDF (slight edge / near tie)". */
+  projectedWinner: string;
+  /** Fraction in [0, 1], or null when the lens has no available data. */
+  averageWinningScore: number | null;
+  interpretation: string;
 };
 
 export const PROJECTION_TAB_LABELS: Record<ProjectionTab, string> = {
@@ -114,37 +117,50 @@ export const PROJECTION_TAB_LABELS: Record<ProjectionTab, string> = {
 
 // Values come from backend/data_files/kerala_past_election_projection_summary.csv,
 // produced by `python backend/generate_scores.py`. Re-bake when that file changes.
+//
+// First three lenses use REAL historical aggregate data (no 2026 blend).
+// Live Intelligence is the only projection-based row.
 export const PROJECTION_SUMMARIES: Record<ProjectionTab, ProjectionSummary> = {
   historical_projection: {
     tab: "historical_projection",
-    label: "Historical Projection",
+    label: "Historical Projection [2011–2014]",
     totalConstituencies: 140,
-    dataReference: "2011 – 2026",
-    projectedWinner: "UDF",
-    averageWinningScore: 0.4853,
+    dataReference: "Not available in uploaded dataset",
+    projectedWinner: "N/A",
+    averageWinningScore: null,
+    interpretation:
+      "Cannot calculate from available data. Pre-result intelligence, not official election result.",
   },
   long_term_trend: {
     tab: "long_term_trend",
-    label: "Long-Term Trend",
+    label: "Long-Term Trend [2016–2021]",
     totalConstituencies: 140,
-    dataReference: "2014 – 2026",
+    dataReference:
+      "kerala_assembly_election_2016.csv + kerala_assembly_election_2021.csv",
     projectedWinner: "LDF",
-    averageWinningScore: 0.7849,
+    averageWinningScore: 0.4528,
+    interpretation:
+      "Strong LDF dominance across two consecutive assembly elections. Pre-result intelligence, not official election result.",
   },
   recent_swing: {
     tab: "recent_swing",
-    label: "Recent Swing",
+    label: "Recent Swing [2021–2024]",
     totalConstituencies: 140,
-    dataReference: "2024 – 2026",
+    dataReference:
+      "kerala_assembly_election_2021.csv + kerala_lok_sabha_election_2024.csv",
     projectedWinner: "UDF",
-    averageWinningScore: 0.4532,
+    averageWinningScore: 0.454,
+    interpretation:
+      "Significant swing from LDF to UDF in Lok Sabha 2024. Pre-result intelligence, not official election result.",
   },
   live_intelligence_score: {
     tab: "live_intelligence_score",
-    label: "Live Intelligence Score",
+    label: "Live Intelligence Score [LIVE DATA]",
     totalConstituencies: 140,
-    dataReference: "LIVE DATA",
-    projectedWinner: "UDF",
-    averageWinningScore: 0.4853,
+    dataReference: "kerala_assembly_2026.csv",
+    projectedWinner: "UDF (slight edge / near tie)",
+    averageWinningScore: 0.4353,
+    interpretation:
+      "Based on projected 2026 vote share data. Pre-result intelligence, not official election result.",
   },
 };

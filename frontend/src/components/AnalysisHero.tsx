@@ -37,7 +37,13 @@ export function AnalysisHero() {
       },
       { label: "DATA REFERENCE", value: summary.dataReference },
       { label: "PROJECTED WINNER", value: summary.projectedWinner },
-      { label: "AVERAGE WINNING SCORE", value: asPercent(summary.averageWinningScore) },
+      {
+        label: "AVERAGE WINNING SCORE",
+        value:
+          summary.averageWinningScore === null
+            ? "—"
+            : asPercent(summary.averageWinningScore),
+      },
     ],
     [summary]
   );

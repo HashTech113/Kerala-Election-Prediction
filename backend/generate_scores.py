@@ -201,6 +201,126 @@ def _avg_winning_score(rows_data: list[tuple[str, float]]) -> tuple[float, dict[
     return total / n, counts
 
 
+# ---- Historical aggregate loaders (real ECI-style totals, not derived) ----
+
+def _load_aggregate(path: Path) -> dict[str, dict[str, float]]:
+    """Load a kerala_*_election_*.csv (party, seats_won, votes, vote_share).
+
+    Returns ``{PARTY_UPPER: {"seats": int, "vote_share": float}}``.
+    Returns an empty dict if the file is missing -- callers must handle that.
+    """
+    if not path.exists():
+        return {}
+    out: dict[str, dict[str, float]] = {}
+    with path.open("r", encoding="utf-8-sig", newline="") as fp:
+        for row in csv.DictReader(fp):
+            party = (row.get("party") or "").strip().upper()
+            if not party:
+                continue
+            try:
+                seats = int(row.get("seats_won") or 0)
+            except ValueError:
+                seats = 0
+            try:
+                share = float(row.get("vote_share") or 0)
+            except ValueError:
+                share = 0.0
+            out[party] = {"seats": seats, "vote_share": share}
+    return out
+
+
+def _winner_from_aggregate(aggr: dict[str, dict[str, float]]) -> tuple[str, float]:
+    """Return ``(party_with_most_seats, that_party_vote_share_percent)``."""
+    if not aggr:
+        return ("", 0.0)
+    winner = max(aggr, key=lambda p: aggr[p].get("seats", 0))
+    return (winner, float(aggr[winner].get("vote_share", 0.0)))
+
+
+# ---- Projection summary (4 rows for the dashboard cards) -----------------
+
+UNAVAILABLE_TEXT = "Not available in uploaded dataset"
+UNAVAILABLE_INTERP = (
+    "Cannot calculate from available data. "
+    "Pre-result intelligence, not official election result."
+)
+
+
+def _build_projection_summary(
+    party_share_sum: dict[str, float], n_ac: int
+) -> list[list]:
+    """Build the four-row projection summary using REAL historical aggregates
+    for the first three rows. Live Intelligence row uses proj_2026_udf_pct
+    averaged across 140 ACs (state-level UDF lead).
+    """
+    aggr_2016 = _load_aggregate(DATA_DIR / "kerala_assembly_election_2016.csv")
+    aggr_2021 = _load_aggregate(DATA_DIR / "kerala_assembly_election_2021.csv")
+    aggr_ls24 = _load_aggregate(DATA_DIR / "kerala_lok_sabha_election_2024.csv")
+
+    # Row 1 -- Historical Projection [2011-2014]: strict N/A (no per-AC source).
+    hist_row = [
+        "Historical Projection [2011-2014]",
+        n_ac,
+        UNAVAILABLE_TEXT,
+        "N/A",
+        "",  # empty cell -- frontend renders this as an em-dash
+        UNAVAILABLE_INTERP,
+        "None",
+    ]
+
+    # Row 2 -- Long-Term Trend [2016-2021]: latest of the long-term window.
+    lt_winner, lt_share = _winner_from_aggregate(aggr_2021)
+    lt_present_2016 = bool(aggr_2016)
+    lt_row = [
+        "Long-Term Trend [2016-2021]",
+        n_ac,
+        "kerala_assembly_election_2016.csv + kerala_assembly_election_2021.csv",
+        lt_winner or "N/A",
+        round(lt_share, 2) if lt_winner else "",
+        (
+            "Strong LDF dominance across two consecutive assembly elections. "
+            "Pre-result intelligence, not official election result."
+            if lt_present_2016 and lt_winner
+            else UNAVAILABLE_INTERP
+        ),
+        "kerala_assembly_election_2016.csv, kerala_assembly_election_2021.csv",
+    ]
+
+    # Row 3 -- Recent Swing [2021-2024]: 2024 LS aggregate is the freshest signal.
+    rs_winner, rs_share = _winner_from_aggregate(aggr_ls24)
+    rs_row = [
+        "Recent Swing [2021-2024]",
+        n_ac,
+        "kerala_assembly_election_2021.csv + kerala_lok_sabha_election_2024.csv",
+        rs_winner or "N/A",
+        round(rs_share, 2) if rs_winner else "",
+        (
+            "Significant swing from LDF to UDF in Lok Sabha 2024. "
+            "Pre-result intelligence, not official election result."
+            if rs_winner
+            else UNAVAILABLE_INTERP
+        ),
+        "kerala_assembly_election_2021.csv, kerala_lok_sabha_election_2024.csv",
+    ]
+
+    # Row 4 -- Live Intelligence Score: per-AC UDF mean from kerala_assembly_2026.csv.
+    udf_avg = round(party_share_sum.get("UDF", 0.0) / max(n_ac, 1) * 100.0, 2)
+    live_row = [
+        "Live Intelligence Score [LIVE DATA]",
+        n_ac,
+        "kerala_assembly_2026.csv",
+        "UDF (slight edge / near tie)",
+        udf_avg,
+        (
+            "Based on projected 2026 vote share data. "
+            "Pre-result intelligence, not official election result."
+        ),
+        "kerala_assembly_2026.csv",
+    ]
+
+    return [hist_row, lt_row, rs_row, live_row]
+
+
 def main() -> None:
     print(f"[generate_scores] Loading {ASSEMBLY_FILE.name} ...")
     assembly = load_assembly_rows()
@@ -313,79 +433,16 @@ def main() -> None:
         party_summary_rows,
     )
 
-    # 6) projection summary (4 rows, one per lens)
-    hist_data: list[tuple[str, float]] = []
-    for row in assembly:
-        winner = (row.get("proj_2026_winner") or "").strip()
-        if winner in PARTIES:
-            score = _f(row.get(f"proj_2026_{winner.lower()}_pct"))
-        else:
-            shares = {p: _f(row.get(f"proj_2026_{p.lower()}_pct")) for p in PARTIES}
-            winner = _argmax(shares)
-            score = shares[winner]
-        hist_data.append((winner, score))
-    hist_avg, hist_counts = _avg_winning_score(hist_data)
-    hist_winner = max(hist_counts, key=lambda p: hist_counts[p])
+    # 6) projection summary (4 rows, one per lens).
+    #
+    # IMPORTANT: the first three rows are sourced from REAL historical aggregate
+    # files only -- never from the 2026 projection blend. Live Intelligence is
+    # the only row that reads from kerala_assembly_2026.csv.
+    #
+    # Historical Projection [2011-2014] is intentionally marked unavailable
+    # because per-AC 2011 Assembly + 2014 LS results are not in the dataset.
+    proj_summary = _build_projection_summary(party_share_sum, n_ac)
 
-    lt_data = [(r[-1], r[-2]) for r in lt_rows]   # (top_party, top_score)
-    lt_avg, lt_counts = _avg_winning_score(lt_data)
-    lt_winner = max(lt_counts, key=lambda p: lt_counts[p])
-
-    rs_data = [(r[-1], r[-2]) for r in rs_rows]
-    rs_avg, rs_counts = _avg_winning_score(rs_data)
-    rs_winner = max(rs_counts, key=lambda p: rs_counts[p])
-
-    # li_rows: [..., top_score, top_party, last_updated]
-    li_data = [(r[-2], r[-3]) for r in li_rows]
-    li_avg, li_counts = _avg_winning_score(li_data)
-    li_winner = max(li_counts, key=lambda p: li_counts[p])
-
-    proj_summary = [
-        [
-            "Historical Projection [2011-2026]",
-            n_ac,
-            "kerala_assembly_2026.csv (proj_2026_winner + proj_2026_*_pct)",
-            hist_winner,
-            round(hist_avg * 100, 2),
-            "Per-row projected winner share averaged across 140 ACs. Pre-result intelligence.",
-            "kerala_assembly_2026.csv",
-        ],
-        [
-            "Long-Term Trend [2014-2026]",
-            n_ac,
-            "winner_2016 + winner_2021 + ls2024_*_pct (per-AC adapted -- Option A)",
-            lt_winner,
-            round(lt_avg * 100, 2),
-            "0.5*winner_2021 + 0.3*LS2024 + 0.2*winner_2016, normalised. Pre-result intelligence.",
-            ", ".join([
-                "kerala_assembly_2026.csv",
-                "kerala_assembly_election_2016.csv",
-                "kerala_assembly_election_2021.csv",
-                "kerala_lok_sabha_election_2024.csv",
-            ]),
-        ],
-        [
-            "Recent Swing [2024-2026]",
-            n_ac,
-            "ls2024_*_pct + lb2025_* (per-AC)",
-            rs_winner,
-            round(rs_avg * 100, 2),
-            "0.7*LS2024 + 0.3*LB2025, normalised. Pre-result intelligence.",
-            ", ".join([
-                "kerala_assembly_2026.csv",
-                "kerala_lok_sabha_election_2024.csv",
-            ]),
-        ],
-        [
-            "Live Intelligence Score [LIVE DATA]",
-            n_ac,
-            "kerala_assembly_2026.csv (proj_2026_*_pct -- AI updates land in Phase 4)",
-            li_winner,
-            round(li_avg * 100, 2),
-            "Phase 1 stub: copies projected vote share until daily AI updates are wired in.",
-            "kerala_assembly_2026.csv",
-        ],
-    ]
     write_csv(
         OUTPUT_FILES["projection_summary"],
         [

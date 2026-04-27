@@ -6,6 +6,8 @@ interface ProjectionSummaryGridProps {
   summary: ProjectionSummary;
 }
 
+const NA_DASH = "—"; // em-dash for "data not available" cells
+
 let hasAnimatedSummaryInSession = false;
 
 export function ProjectionSummaryGrid({ summary }: ProjectionSummaryGridProps) {
@@ -15,11 +17,13 @@ export function ProjectionSummaryGrid({ summary }: ProjectionSummaryGridProps) {
     hasAnimatedRef.current ? summary.projectedWinner : "",
   );
 
+  const scoreAvailable = summary.averageWinningScore !== null;
+
   const [animatedTotal, setAnimatedTotal] = useState(
     hasAnimatedRef.current ? summary.totalConstituencies : 0,
   );
   const [animatedScore, setAnimatedScore] = useState(
-    hasAnimatedRef.current ? summary.averageWinningScore : 0,
+    hasAnimatedRef.current ? summary.averageWinningScore ?? 0 : 0,
   );
   const [animatedWinner, setAnimatedWinner] = useState(
     hasAnimatedRef.current ? summary.projectedWinner : "",
@@ -31,7 +35,7 @@ export function ProjectionSummaryGrid({ summary }: ProjectionSummaryGridProps) {
   useEffect(() => {
     if (!hasAnimatedRef.current) return;
     setAnimatedTotal(summary.totalConstituencies);
-    setAnimatedScore(summary.averageWinningScore);
+    setAnimatedScore(summary.averageWinningScore ?? 0);
     if (previousWinnerRef.current !== summary.projectedWinner) {
       previousWinnerRef.current = summary.projectedWinner;
       setAnimatedWinner(summary.projectedWinner);
@@ -55,16 +59,18 @@ export function ProjectionSummaryGrid({ summary }: ProjectionSummaryGridProps) {
       hasAnimatedRef.current = true;
       hasAnimatedSummaryInSession = true;
 
-      const scoreDurationMs = 1200;
-      const scoreStart = performance.now();
       const scoreTarget = summary.averageWinningScore;
-      const scoreTick = (now: number) => {
-        const t = Math.min((now - scoreStart) / scoreDurationMs, 1);
-        const eased = 1 - Math.pow(1 - t, 3);
-        setAnimatedScore(scoreTarget * eased);
-        if (t < 1) scoreFrameId = requestAnimationFrame(scoreTick);
-      };
-      scoreFrameId = requestAnimationFrame(scoreTick);
+      if (scoreTarget !== null) {
+        const scoreDurationMs = 1200;
+        const scoreStart = performance.now();
+        const scoreTick = (now: number) => {
+          const t = Math.min((now - scoreStart) / scoreDurationMs, 1);
+          const eased = 1 - Math.pow(1 - t, 3);
+          setAnimatedScore(scoreTarget * eased);
+          if (t < 1) scoreFrameId = requestAnimationFrame(scoreTick);
+        };
+        scoreFrameId = requestAnimationFrame(scoreTick);
+      }
 
       const totalDurationMs = 900;
       const totalStart = performance.now();
@@ -118,27 +124,30 @@ export function ProjectionSummaryGrid({ summary }: ProjectionSummaryGridProps) {
   ]);
 
   return (
-    <section className="kpi-grid kpi-grid-4" ref={gridRef}>
-      <article className="panel kpi-card">
-        <h3>Total Constituencies</h3>
-        <strong>{animatedTotal}</strong>
-      </article>
-      <article className="panel kpi-card">
-        <h3>Data Reference</h3>
-        <strong className="kpi-data-reference">{summary.dataReference}</strong>
-      </article>
-      <article className="panel kpi-card">
-        <h3>Projected Winner</h3>
-        <strong className="winner-roll-box" aria-live="polite">
-          <span className="winner-roll-text" key={winnerRollToken}>
-            {animatedWinner || "-"}
-          </span>
-        </strong>
-      </article>
-      <article className="panel kpi-card">
-        <h3>Average Winning Score</h3>
-        <strong>{asPercent(animatedScore)}</strong>
-      </article>
-    </section>
+    <>
+      <section className="kpi-grid kpi-grid-4" ref={gridRef}>
+        <article className="panel kpi-card">
+          <h3>Total Constituencies</h3>
+          <strong>{animatedTotal}</strong>
+        </article>
+        <article className="panel kpi-card">
+          <h3>Data Reference</h3>
+          <strong className="kpi-data-reference">{summary.dataReference}</strong>
+        </article>
+        <article className="panel kpi-card">
+          <h3>Projected Winner</h3>
+          <strong className="winner-roll-box" aria-live="polite">
+            <span className="winner-roll-text" key={winnerRollToken}>
+              {animatedWinner || NA_DASH}
+            </span>
+          </strong>
+        </article>
+        <article className="panel kpi-card">
+          <h3>Average Winning Score</h3>
+          <strong>{scoreAvailable ? asPercent(animatedScore) : NA_DASH}</strong>
+        </article>
+      </section>
+      <p className="projection-interpretation">{summary.interpretation}</p>
+    </>
   );
 }

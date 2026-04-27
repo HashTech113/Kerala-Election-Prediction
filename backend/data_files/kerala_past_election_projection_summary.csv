@@ -1,5 +1,5 @@
 projection_type,total_constituencies,data_reference,projected_winner,average_winning_score,interpretation,source_files
-Historical Projection [2011-2014],140,Not available in uploaded dataset,N/A,,"Cannot calculate from available data. Pre-result intelligence, not official election result.",None
-Long-Term Trend [2016-2021],140,kerala_assembly_election_2016.csv + kerala_assembly_election_2021.csv,LDF,45.28,"Strong LDF dominance across two consecutive assembly elections. Pre-result intelligence, not official election result.","kerala_assembly_election_2016.csv, kerala_assembly_election_2021.csv"
-Recent Swing [2021-2024],140,kerala_assembly_election_2021.csv + kerala_lok_sabha_election_2024.csv,UDF,45.4,"Significant swing from LDF to UDF in Lok Sabha 2024. Pre-result intelligence, not official election result.","kerala_assembly_election_2021.csv, kerala_lok_sabha_election_2024.csv"
-Live Intelligence Score [LIVE DATA],140,kerala_assembly_2026.csv,UDF (slight edge / near tie),43.53,"Based on projected 2026 vote share data. Pre-result intelligence, not official election result.",kerala_assembly_2026.csv
+Historical Projection [2011-2014],140,2011 – 2026,N/A,,"Cannot calculate from available data. Pre-result intelligence, not official election result.",None
+Long-Term Trend [2016-2021],140,2014 – 2026,LDF,45.28,"Strong LDF dominance across two consecutive assembly elections. Pre-result intelligence, not official election result.","kerala_assembly_election_2016.csv, kerala_assembly_election_2021.csv"
+Recent Swing [2021-2024],140,2024 – 2026,UDF,45.4,"Significant swing from LDF to UDF in Lok Sabha 2024. Pre-result intelligence, not official election result.","kerala_assembly_election_2021.csv, kerala_lok_sabha_election_2024.csv"
+Live Intelligence Score [LIVE DATA],140,Live Data,UDF (slight edge / near tie),43.53,"Based on projected 2026 vote share data. Pre-result intelligence, not official election result.",kerala_assembly_2026.csv

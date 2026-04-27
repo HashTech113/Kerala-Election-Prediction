@@ -120,12 +120,15 @@ export const PROJECTION_TAB_LABELS: Record<ProjectionTab, string> = {
 //
 // First three lenses use REAL historical aggregate data (no 2026 blend).
 // Live Intelligence is the only projection-based row.
+//
+// dataReference is a short year-range label for display. The full source file
+// list is documented inside the projection-summary CSV's `source_files` column.
 export const PROJECTION_SUMMARIES: Record<ProjectionTab, ProjectionSummary> = {
   historical_projection: {
     tab: "historical_projection",
-    label: "Historical Projection [2011–2014]",
+    label: "Historical Projection",
     totalConstituencies: 140,
-    dataReference: "Not available in uploaded dataset",
+    dataReference: "2011 – 2026",
     projectedWinner: "N/A",
     averageWinningScore: null,
     interpretation:
@@ -133,10 +136,9 @@ export const PROJECTION_SUMMARIES: Record<ProjectionTab, ProjectionSummary> = {
   },
   long_term_trend: {
     tab: "long_term_trend",
-    label: "Long-Term Trend [2016–2021]",
+    label: "Long-Term Trend",
     totalConstituencies: 140,
-    dataReference:
-      "kerala_assembly_election_2016.csv + kerala_assembly_election_2021.csv",
+    dataReference: "2014 – 2026",
     projectedWinner: "LDF",
     averageWinningScore: 0.4528,
     interpretation:
@@ -144,10 +146,9 @@ export const PROJECTION_SUMMARIES: Record<ProjectionTab, ProjectionSummary> = {
   },
   recent_swing: {
     tab: "recent_swing",
-    label: "Recent Swing [2021–2024]",
+    label: "Recent Swing",
     totalConstituencies: 140,
-    dataReference:
-      "kerala_assembly_election_2021.csv + kerala_lok_sabha_election_2024.csv",
+    dataReference: "2024 – 2026",
     projectedWinner: "UDF",
     averageWinningScore: 0.454,
     interpretation:
@@ -155,9 +156,9 @@ export const PROJECTION_SUMMARIES: Record<ProjectionTab, ProjectionSummary> = {
   },
   live_intelligence_score: {
     tab: "live_intelligence_score",
-    label: "Live Intelligence Score [LIVE DATA]",
+    label: "Live Intelligence Score",
     totalConstituencies: 140,
-    dataReference: "kerala_assembly_2026.csv",
+    dataReference: "Live Data",
     projectedWinner: "UDF (slight edge / near tie)",
     averageWinningScore: 0.4353,
     interpretation:

@@ -257,24 +257,28 @@ def _build_projection_summary(
     aggr_2021 = _load_aggregate(DATA_DIR / "kerala_assembly_election_2021.csv")
     aggr_ls24 = _load_aggregate(DATA_DIR / "kerala_lok_sabha_election_2024.csv")
 
-    # Row 1 -- Historical Projection [2011-2014]: strict N/A (no per-AC source).
+    # The `data_reference` column is a short year-range label for the dashboard
+    # card. The actual file paths backing each row live in `source_files` for
+    # audit/traceability.
+
+    # Row 1 -- Historical Projection: strict N/A (no per-AC 2011/2014 source).
     hist_row = [
         "Historical Projection [2011-2014]",
         n_ac,
-        UNAVAILABLE_TEXT,
+        "2011 – 2026",
         "N/A",
         "",  # empty cell -- frontend renders this as an em-dash
         UNAVAILABLE_INTERP,
         "None",
     ]
 
-    # Row 2 -- Long-Term Trend [2016-2021]: latest of the long-term window.
+    # Row 2 -- Long-Term Trend: latest assembly aggregate (2021 official).
     lt_winner, lt_share = _winner_from_aggregate(aggr_2021)
     lt_present_2016 = bool(aggr_2016)
     lt_row = [
         "Long-Term Trend [2016-2021]",
         n_ac,
-        "kerala_assembly_election_2016.csv + kerala_assembly_election_2021.csv",
+        "2014 – 2026",
         lt_winner or "N/A",
         round(lt_share, 2) if lt_winner else "",
         (
@@ -286,12 +290,12 @@ def _build_projection_summary(
         "kerala_assembly_election_2016.csv, kerala_assembly_election_2021.csv",
     ]
 
-    # Row 3 -- Recent Swing [2021-2024]: 2024 LS aggregate is the freshest signal.
+    # Row 3 -- Recent Swing: 2024 LS aggregate is the freshest official signal.
     rs_winner, rs_share = _winner_from_aggregate(aggr_ls24)
     rs_row = [
         "Recent Swing [2021-2024]",
         n_ac,
-        "kerala_assembly_election_2021.csv + kerala_lok_sabha_election_2024.csv",
+        "2024 – 2026",
         rs_winner or "N/A",
         round(rs_share, 2) if rs_winner else "",
         (
@@ -308,7 +312,7 @@ def _build_projection_summary(
     live_row = [
         "Live Intelligence Score [LIVE DATA]",
         n_ac,
-        "kerala_assembly_2026.csv",
+        "Live Data",
         "UDF (slight edge / near tie)",
         udf_avg,
         (

@@ -1,9 +1,16 @@
-# Railway should only deploy the Python backend.
-# The root package.json exists for local dev orchestration (`npm run dev`)
-# — it has no role on Railway.
+# Railway should only deploy the Python backend via Dockerfile.
+# .dockerignore is the primary excluder; this file is a fallback in case
+# Railway falls back to Nixpacks. Keep the two in sync.
+#
+# The root package.json + package-lock.json exist for local dev orchestration
+# (`npm run dev`). They MUST NOT enter the Railway build context, or Nixpacks
+# will detect Node and try to run `vite build` (it fails with vite: not found).
 
 node_modules/
 frontend/
+package.json
+package-lock.json
+run.py
 *.log
 .venv/
 venv/

@@ -1,0 +1,5 @@
+projection_type,total_constituencies,data_reference,projected_winner,average_winning_score,interpretation,source_files
+Historical Projection [2011-2026],140,kerala_assembly_2026.csv (proj_2026_winner + proj_2026_*_pct),UDF,48.53,Per-row projected winner share averaged across 140 ACs. Pre-result intelligence.,kerala_assembly_2026.csv
+Long-Term Trend [2014-2026],140,winner_2016 + winner_2021 + ls2024_*_pct (per-AC adapted -- Option A),LDF,78.49,"0.5*winner_2021 + 0.3*LS2024 + 0.2*winner_2016, normalised. Pre-result intelligence.","kerala_assembly_2026.csv, kerala_assembly_election_2016.csv, kerala_assembly_election_2021.csv, kerala_lok_sabha_election_2024.csv"
+Recent Swing [2024-2026],140,ls2024_*_pct + lb2025_* (per-AC),UDF,45.32,"0.7*LS2024 + 0.3*LB2025, normalised. Pre-result intelligence.","kerala_assembly_2026.csv, kerala_lok_sabha_election_2024.csv"
+Live Intelligence Score [LIVE DATA],140,kerala_assembly_2026.csv (proj_2026_*_pct -- AI updates land in Phase 4),UDF,48.53,Phase 1 stub: copies projected vote share until daily AI updates are wired in.,kerala_assembly_2026.csv

@@ -87,3 +87,64 @@ export const PREDICTION_LEVEL_LABELS: Record<PredictionLevel, string> = {
   recent_swing: "Recent Swing",
   live_intelligence_score: "Live Intelligence Score",
 };
+
+// ---- Projection summary tabs (UI-only; not sent to backend) --------------
+
+export type ProjectionTab =
+  | "historical_projection"
+  | "long_term_trend"
+  | "recent_swing"
+  | "live_intelligence_score";
+
+export type ProjectionSummary = {
+  tab: ProjectionTab;
+  label: string;
+  totalConstituencies: number;
+  dataReference: string;
+  projectedWinner: Party;
+  averageWinningScore: number; // fraction in [0, 1]
+};
+
+export const PROJECTION_TAB_LABELS: Record<ProjectionTab, string> = {
+  historical_projection: "Historical Projection",
+  long_term_trend: "Long-Term Trend",
+  recent_swing: "Recent Swing",
+  live_intelligence_score: "Live Intelligence Score",
+};
+
+// Values come from backend/data_files/kerala_past_election_projection_summary.csv,
+// produced by `python backend/generate_scores.py`. Re-bake when that file changes.
+export const PROJECTION_SUMMARIES: Record<ProjectionTab, ProjectionSummary> = {
+  historical_projection: {
+    tab: "historical_projection",
+    label: "Historical Projection",
+    totalConstituencies: 140,
+    dataReference: "2011 – 2026",
+    projectedWinner: "UDF",
+    averageWinningScore: 0.4853,
+  },
+  long_term_trend: {
+    tab: "long_term_trend",
+    label: "Long-Term Trend",
+    totalConstituencies: 140,
+    dataReference: "2014 – 2026",
+    projectedWinner: "LDF",
+    averageWinningScore: 0.7849,
+  },
+  recent_swing: {
+    tab: "recent_swing",
+    label: "Recent Swing",
+    totalConstituencies: 140,
+    dataReference: "2024 – 2026",
+    projectedWinner: "UDF",
+    averageWinningScore: 0.4532,
+  },
+  live_intelligence_score: {
+    tab: "live_intelligence_score",
+    label: "Live Intelligence Score",
+    totalConstituencies: 140,
+    dataReference: "LIVE DATA",
+    projectedWinner: "UDF",
+    averageWinningScore: 0.4853,
+  },
+};

@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { PartyBadge } from "./components/PartyBadge";
-import { AnimatedKpiGrid } from "./components/AnimatedKpiGrid";
+import { ProjectionSummaryGrid } from "./components/ProjectionSummaryGrid";
 import {
   API_BASE,
   EXPECTED_API_VERSION,
@@ -14,20 +14,20 @@ import {
   PredictionRow,
   Party,
   PredictionsMeta,
-  PREDICTION_LEVEL_LABELS,
-  PredictionLevel,
+  PROJECTION_SUMMARIES,
+  ProjectionTab,
 } from "./types/prediction";
 import { asPercentPrecise, asPercentSmart, asSeatPercent } from "./utils/format";
 
-const ALL_PARTIES: Party[] = ["LDF", "UDF", "NDA", "OTHERS"];
 const ALLOWED_SOURCE_FILES = new Set([
   "predictions_2026.csv",
   "kerala_prediction_scenarios_2026.csv",
 ]);
-const PREDICTION_LEVEL_OPTIONS: PredictionLevel[] = [
-  "long_term_trend",
-  "recent_swing",
-  "live_intelligence_score",
+const tabs: Array<{ key: ProjectionTab; label: string }> = [
+  { key: "historical_projection", label: "HISTORICAL PROJECTION" },
+  { key: "long_term_trend", label: "LONG-TERM TREND" },
+  { key: "recent_swing", label: "RECENT SWING" },
+  { key: "live_intelligence_score", label: "LIVE INTELLIGENCE SCORE" },
 ];
 // Backend "confidence" is now the top-1 predicted-party probability
 // (range 0.25-1.0 for 4 classes). 0.60 cleanly separates confident calls
@@ -133,9 +133,7 @@ export function App() {
   const [district, setDistrict] = useState("ALL");
   const [party, setParty] = useState<Party | "ALL">("ALL");
   const [query, setQuery] = useState("");
-  const [predictionLevel, setPredictionLevel] = useState<PredictionLevel>(
-    "live_intelligence_score"
-  );
+  const [activeTab, setActiveTab] = useState<ProjectionTab>(tabs[0].key);
   const middleStageRef = useRef<HTMLElement | null>(null);
   const hasAnimatedMiddleStageRef = useRef(hasAnimatedMiddleStageInSession);
   const prefersReducedMotion = useReducedMotion();
@@ -235,19 +233,6 @@ export function App() {
   }, [seatCounts, displayParties]);
   const total = filteredRows.length;
   const safeTotal = total || 1;
-  const projectedWinner = useMemo<Party | "-">(() => {
-    if (total === 0) return "-";
-    let winner: Party = ALL_PARTIES[0];
-    for (const partyName of ALL_PARTIES) {
-      if (seatCounts[partyName] > seatCounts[winner]) {
-        winner = partyName;
-      }
-    }
-    return winner;
-  }, [total, seatCounts]);
-  const averageWinMargin = useMemo(() => {
-    return filteredRows.reduce((sum, r) => sum + r.confidence, 0) / safeTotal;
-  }, [filteredRows, safeTotal]);
   const highMarginSeats = useMemo(() => {
     return filteredRows.reduce(
       (count, row) =>
@@ -342,28 +327,21 @@ export function App() {
 
         {!loading && !error && (
           <>
-            <nav className="prediction-level-tabs" aria-label="Prediction level">
-              {PREDICTION_LEVEL_OPTIONS.map((level) => (
+            <nav className="pred-tabs" aria-label="Prediction tabs">
+              {tabs.map((tab) => (
                 <button
-                  key={level}
+                  key={tab.key}
                   type="button"
-                  className={
-                    "prediction-level-tab" +
-                    (predictionLevel === level ? " is-active" : "")
-                  }
-                  onClick={() => setPredictionLevel(level)}
-                  aria-pressed={predictionLevel === level}
+                  className={`pred-tab ${activeTab === tab.key ? "is-active" : ""}`}
+                  onClick={() => setActiveTab(tab.key)}
+                  aria-pressed={activeTab === tab.key}
                 >
-                  {PREDICTION_LEVEL_LABELS[level]}
+                  {tab.label}
                 </button>
               ))}
             </nav>
 
-            <AnimatedKpiGrid
-              totalConstituencies={total}
-              projectedWinner={String(projectedWinner)}
-              averageWinMargin={averageWinMargin}
-            />
+            <ProjectionSummaryGrid summary={PROJECTION_SUMMARIES[activeTab]} />
 
             <section className="middle-stage" ref={middleStageRef}>
               <aside className="left-stack">

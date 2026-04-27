@@ -1,0 +1,5 @@
+party,projected_seats,average_projected_vote_share_pct,note
+LDF,66,42.38,Projected seat count from kerala_assembly_2026.csv (proj_2026_winner)
+UDF,68,43.53,Projected seat count from kerala_assembly_2026.csv (proj_2026_winner)
+NDA,4,11.58,Projected seat count from kerala_assembly_2026.csv (proj_2026_winner)
+OTHERS,2,2.52,Projected seat count from kerala_assembly_2026.csv (proj_2026_winner)

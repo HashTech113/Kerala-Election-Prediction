@@ -1,4 +1,11 @@
-import { HealthResponse, PredictionRow, PredictionsMeta } from "../types/prediction";
+import {
+  HealthResponse,
+  KeralaScenarioResponse,
+  PredictionLevel,
+  PredictionRow,
+  PredictionsMeta,
+  ScenarioName,
+} from "../types/prediction";
 
 /**
  * API Base URL Configuration
@@ -262,6 +269,35 @@ export async function fetchPredictions(signal?: AbortSignal): Promise<Prediction
     }
     throw error;
   }
+}
+
+export async function fetchKeralaScenario(
+  scenario: ScenarioName,
+  level: PredictionLevel = "live_intelligence_score",
+  signal?: AbortSignal
+): Promise<KeralaScenarioResponse> {
+  const path = `/api/predictions/kerala?scenario=${encodeURIComponent(
+    scenario
+  )}&level=${encodeURIComponent(level)}`;
+  const response = await fetchWithApiFallback(path, {
+    signal,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error(
+        `Scenario data missing on backend (${response.status}). ` +
+          `Run \`python backend/build_scenarios.py\` and redeploy.`
+      );
+    }
+    throw new Error(
+      `Failed to load Kerala scenario "${scenario}" ` +
+        `(${response.status} ${response.statusText}) from ${API_BASE}`
+    );
+  }
+
+  return (await response.json()) as KeralaScenarioResponse;
 }
 
 export { API_BASE };

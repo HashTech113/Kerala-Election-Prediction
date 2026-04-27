@@ -8,7 +8,7 @@ from the original server).
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -39,6 +39,7 @@ class PredictionsMeta(BaseModel):
     source_sha256: Optional[str] = None
     fallback_in_use: bool
     allow_assembly_fallback: bool
+    active_scenario: Optional[str] = None
     total_constituencies: int
     seat_counts: SeatCounts
     projected_winner: str
@@ -54,3 +55,58 @@ class HealthResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     available_routes: Optional[list[str]] = None
+
+
+# ---- Scenario predictions ------------------------------------------------
+
+ScenarioName = Literal["base_model", "votevibe"]
+PredictionLevel = Literal["long_term_trend", "recent_swing", "live_intelligence_score"]
+
+
+class ScenarioConstituency(BaseModel):
+    constituency: str
+    district: str
+    region_5way: Optional[str] = None
+    winner: str = Field(..., description="Predicted winning alliance for this scenario")
+    confidence: float = Field(..., description="Winner's vote share in this scenario (0-1)")
+    LDF: float
+    UDF: float
+    NDA: float
+    OTHERS: float
+    base_model_winner: str
+    changed_from_base: bool = Field(
+        ..., description="True when this scenario flips the base-model winner"
+    )
+    scenario_source: Optional[str] = None
+    scenario_notes: Optional[str] = Field(
+        None, description="Reason the winner differs from the base model (if any)"
+    )
+
+
+class ScenarioVoteShare(BaseModel):
+    LDF: float
+    UDF: float
+    NDA: float
+    OTHERS: float
+
+
+class ScenarioSeatValidation(BaseModel):
+    expected: Optional[SeatCounts] = None
+    actual: SeatCounts
+    total: int
+    ok: bool
+
+
+class KeralaScenarioResponse(BaseModel):
+    scenario: ScenarioName
+    scenario_name: str
+    prediction_level: PredictionLevel
+    result_status: str = "Prediction, not final result"
+    counting_date: str = "2026-05-04"
+    seat_counts: SeatCounts
+    vote_share_estimate: ScenarioVoteShare
+    confidence_level: float
+    constituencies: list[ScenarioConstituency]
+    changed_seats: list[ScenarioConstituency]
+    notes: str
+    seat_validation: ScenarioSeatValidation

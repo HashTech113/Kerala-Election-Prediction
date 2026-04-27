@@ -66,6 +66,9 @@ app.add_middleware(
         "X-Predictions-Last-Modified-Utc",
         "X-Predictions-SHA256",
         "X-Predictions-Fallback",
+        "X-Predictions-Scenario",
+        "X-Predictions-Level",
+        "X-Predictions-Active-Scenario",
     ],
 )
 
@@ -84,6 +87,9 @@ def root() -> JSONResponse:
                 "/api/health",
                 "/api/predictions",
                 "/api/predictions/meta",
+                "/api/predictions/kerala",
+                "/api/predictions/kerala/summary",
+                "/api/predictions/kerala/scenarios",
                 "/docs",
                 "/redoc",
             ],
